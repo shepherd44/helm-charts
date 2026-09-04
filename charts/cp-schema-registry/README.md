@@ -19,7 +19,7 @@ This chart bootstraps a deployment of a Confluent Schema Registry
 
 | | |
 |---|---|
-| Chart | `0.3.0` |
+| Chart | `0.4.0` |
 | Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
 
 Confluent supports each Community release for two years from its minor release date.
@@ -33,7 +33,7 @@ The JMX exporter sidecar is **off by default** — see [Metrics](#metrics).
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.3.0 \
+  --version 0.4.0 \
   --set schema_registry.kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
@@ -44,7 +44,7 @@ With a values file:
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.3.0 -f my-values.yaml
+  --version 0.4.0 -f my-values.yaml
 ```
 
 ```yaml
@@ -81,6 +81,37 @@ kubectl port-forward svc/my-schema-registry-cp-schema-registry 8081:8081
 curl localhost:8081/subjects
 ```
 
+## Ingress
+
+Off by default. The REST API is served on `servicePort` (8081).
+
+```yaml
+schema_registry:
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: schema-registry.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+```
+
+`name` overrides the Ingress name, which is what you need to adopt an Ingress that
+already exists under a different name — otherwise the chart creates a second one
+alongside it and both point at the same Service.
+
+```yaml
+    name: idc-kafka-schema-registry
+```
+
+`annotations` passes through as-is, for the older `kubernetes.io/ingress.class` style or
+anything controller-specific. `tls` takes the standard list of `{secretName, hosts}`.
+
+Schema Registry has no authentication of its own here. An Ingress publishes a writable
+API — anything that can reach it can register or delete schemas — so put it behind
+something, or keep it cluster-internal.
+
 ## Health, scheduling, security
 
 Probes are on by default. Liveness hits `/`, which only needs Jetty up; readiness hits
@@ -108,6 +139,11 @@ with two or more replicas.
 empty by default so the JVM keeps its own container-aware sizing. Set it together with
 `resources.limits.memory`, not on its own.
 
+The Schema Registry container is rendered first and the pod carries
+`kubectl.kubernetes.io/default-container`, so `kubectl logs`/`exec` without `-c` reach
+the server rather than the metrics sidecar. Before 0.4.0 the sidecar was `containers[0]`,
+which made its JVM startup output look like Schema Registry's.
+
 Object metadata carries both the legacy `app`/`release`/`chart`/`heritage` labels and the
 standard `app.kubernetes.io/*` set. The Deployment's `spec.selector` still uses only the
 legacy pair, on purpose: a selector is immutable, so changing it would break
@@ -134,6 +170,20 @@ The sidecar image is `shepherd9664/jmx-exporter`, built from
 [jmx_prometheus_standalone](https://github.com/prometheus/jmx_exporter) 1.6.0. There is
 no maintained public image for this — `solsson/kafka-prometheus-jmx-exporter`, which
 this chart used to run, was last pushed in 2020 on a JDK 8 base.
+
+The old image was not merely stale, it was wrong on current nodes. Its command carried
+`-XX:+UseCGroupMemoryLimitForHeap`, a JDK 8 flag that reads the **cgroup v1** path
+`/sys/fs/cgroup/memory/memory.limit_in_bytes`. On a cgroup v2 node that file does not
+exist, so the JVM logged
+
+```
+OpenJDK 64-Bit Server VM warning: Unable to open cgroup memory limit file /sys/fs/cgroup/memory/memory.limit_in_bytes
+    Max. Heap Size (Estimated): 26.67G
+```
+
+and sized its heap from the host's memory instead of the container's. With no memory
+limit on the sidecar, nothing else capped it either. The current image is JRE 21, which
+reads cgroup v2 without help, and the flags are gone.
 
 Its entrypoint is the jar, so the deployment passes only `args` (port, config file).
 Pointing `schema_registry.prometheus.jmx.image` at a different image means matching that
@@ -174,6 +224,13 @@ helm install my-schema-registry shepherd44/cp-schema-registry \
 | `schema_registry.podDisruptionBudget.enabled` | Create a PodDisruptionBudget | `false` |
 | `schema_registry.podDisruptionBudget.minAvailable` | Minimum available pods | `1` |
 | `schema_registry.podDisruptionBudget.maxUnavailable` | Maximum unavailable pods | `""` |
+| `schema_registry.ingress.enabled` | Create an Ingress | `false` |
+| `schema_registry.ingress.name` | Ingress name; defaults to the chart fullname | `""` |
+| `schema_registry.ingress.className` | `spec.ingressClassName` | `""` |
+| `schema_registry.ingress.labels` | Extra labels on the Ingress | `{}` |
+| `schema_registry.ingress.annotations` | Ingress annotations | `{}` |
+| `schema_registry.ingress.hosts` | Hosts and paths | `[]` |
+| `schema_registry.ingress.tls` | TLS blocks | `[]` |
 | `schema_registry.schemaRegistryOpts` | Extra `SCHEMA_REGISTRY_OPTS` | unset |
 | `schema_registry.resources` | Requests and limits | `{}` |
 | `schema_registry.podAnnotations` | Annotations on the pod | `{}` |

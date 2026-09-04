@@ -13,8 +13,9 @@ spec:
     metadata:
       labels:
 {{ include "cp-schema-registry.labels" . | indent 8 }}
-      {{- if or .Values.schema_registry.podAnnotations .Values.schema_registry.prometheus.jmx.enabled }}
       annotations:
+        {{/* kubectl logs/exec 가 사이드카가 아니라 서버 컨테이너를 고르게 한다. */}}
+        kubectl.kubernetes.io/default-container: {{ template "cp-schema-registry.name" . }}-server
       {{- range $key, $value := .Values.schema_registry.podAnnotations }}
         {{ $key }}: {{ $value | quote }}
       {{- end }}
@@ -22,36 +23,12 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: {{ .Values.schema_registry.prometheus.jmx.port | quote }}
       {{- end }}
-      {{- end }}
     spec:
       securityContext:
       {{- if .Values.schema_registry.securityContext }}
 {{ toYaml .Values.schema_registry.securityContext | indent 8 }}
       {{- end}}
       containers:
-        {{- if .Values.schema_registry.prometheus.jmx.enabled }}
-        - name: prometheus-jmx-exporter
-          image: "{{ .Values.schema_registry.prometheus.jmx.image }}:{{ .Values.schema_registry.prometheus.jmx.imageTag }}"
-          imagePullPolicy: "{{ .Values.schema_registry.prometheus.jmx.imagePullPolicy }}"
-          {{/* The image entrypoint is `java -jar jmx_prometheus_standalone.jar`, so
-          only args are passed. The command this replaced carried
-          -XX:+UseCGroupMemoryLimitForHeap and -XX:MaxRAMFraction=1, which JDK 11
-          removed; they only worked because that image was JDK 8. */}}
-          args:
-          - {{ .Values.schema_registry.prometheus.jmx.port | quote }}
-          - /etc/jmx-schema-registry/jmx-schema-registry-prometheus.yml
-          ports:
-          - containerPort: {{ .Values.schema_registry.prometheus.jmx.port }}
-          resources:
-{{ toYaml .Values.schema_registry.prometheus.jmx.resources | indent 12 }}
-          volumeMounts:
-          - name: jmx-config
-            mountPath: /etc/jmx-schema-registry
-          securityContext:
-          {{- if .Values.schema_registry.prometheus.jmx.securityContext }}
-{{ toYaml .Values.schema_registry.prometheus.jmx.securityContext | indent 12 }}
-          {{- end}}
-        {{- end }}
         - name: {{ template "cp-schema-registry.name" . }}-server
           image: "{{ .Values.schema_registry.image }}:{{ .Values.schema_registry.imageTag }}"
           imagePullPolicy: "{{ .Values.schema_registry.imagePullPolicy }}"
@@ -110,6 +87,29 @@ spec:
           - name: JMX_PORT
             value: "{{ .Values.schema_registry.jmx.port }}"
           {{- end }}
+        {{- if .Values.schema_registry.prometheus.jmx.enabled }}
+        - name: prometheus-jmx-exporter
+          image: "{{ .Values.schema_registry.prometheus.jmx.image }}:{{ .Values.schema_registry.prometheus.jmx.imageTag }}"
+          imagePullPolicy: "{{ .Values.schema_registry.prometheus.jmx.imagePullPolicy }}"
+          {{/* The image entrypoint is `java -jar jmx_prometheus_standalone.jar`, so
+          only args are passed. The command this replaced carried
+          -XX:+UseCGroupMemoryLimitForHeap and -XX:MaxRAMFraction=1, which JDK 11
+          removed; they only worked because that image was JDK 8. */}}
+          args:
+          - {{ .Values.schema_registry.prometheus.jmx.port | quote }}
+          - /etc/jmx-schema-registry/jmx-schema-registry-prometheus.yml
+          ports:
+          - containerPort: {{ .Values.schema_registry.prometheus.jmx.port }}
+          resources:
+{{ toYaml .Values.schema_registry.prometheus.jmx.resources | indent 12 }}
+          volumeMounts:
+          - name: jmx-config
+            mountPath: /etc/jmx-schema-registry
+          securityContext:
+          {{- if .Values.schema_registry.prometheus.jmx.securityContext }}
+{{ toYaml .Values.schema_registry.prometheus.jmx.securityContext | indent 12 }}
+          {{- end}}
+        {{- end }}
       {{- if .Values.schema_registry.imagePullSecrets }}
       imagePullSecrets:
 {{ toYaml .Values.schema_registry.imagePullSecrets | indent 8 }}

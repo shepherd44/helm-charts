@@ -3,7 +3,23 @@ entries:
   cp-schema-registry:
   - apiVersion: v2
     appVersion: 7.9.9
-    created: "2026-09-05T01:37:55.385412+09:00"
+    created: "2026-09-05T02:05:16.335472+09:00"
+    description: A Helm chart for Confluent Schema Registry on Kubernetes
+    digest: 220012930200b981dfd17a64816d7d73f64630032a532af14830a97dc57e7ac5
+    keywords:
+    - kafka
+    - schema-registry
+    - confluent
+    name: cp-schema-registry
+    sources:
+    - https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+    type: application
+    urls:
+    - https://shepherd44.github.io/helm-charts/docs/cp-schema-registry-0.4.0.tgz
+    version: 0.4.0
+  - apiVersion: v2
+    appVersion: 7.9.9
+    created: "2026-09-05T02:05:16.335144+09:00"
     description: A Helm chart for Confluent Schema Registry on Kubernetes
     digest: 1a55cf6543b53d8f0d89a8c930046d0674afe5f978785ce457546654dc91a08b
     keywords:
@@ -19,7 +35,7 @@ entries:
     version: 0.3.0
   - apiVersion: v2
     appVersion: 7.9.9
-    created: "2026-09-05T01:37:55.38498+09:00"
+    created: "2026-09-05T02:05:16.334554+09:00"
     description: A Helm chart for Confluent Schema Registry on Kubernetes
     digest: 2f5d85ba287e4968bdb0f69e07dcf6e2d9b1a5bbd5992e1b8584a87f4c48d60b
     keywords:
@@ -35,7 +51,7 @@ entries:
     version: 0.2.0
   - apiVersion: v1
     appVersion: 7.5.3
-    created: "2026-09-05T01:37:55.384135+09:00"
+    created: "2026-09-05T02:05:16.333941+09:00"
     description: A Helm chart for Confluent Schema Registry on Kubernetes
     digest: dfb55366bccdf4b3b708cf3ecef0427de3b50eaca922c960b9f96554d4b605ff
     name: cp-schema-registry
@@ -55,7 +71,7 @@ entries:
       tanzuCategory: service
     apiVersion: v2
     appVersion: 8.0.30
-    created: "2026-09-05T01:37:55.388124+09:00"
+    created: "2026-09-05T02:05:16.338248+09:00"
     dependencies:
     - name: common
       repository: file://../common
@@ -86,4 +102,4 @@ entries:
     urls:
     - https://shepherd44.github.io/helm-charts/docs/mongodb-sharded-9.4.17.tgz
     version: 9.4.17
-generated: "2026-09-05T01:37:55.383142+09:00"
+generated: "2026-09-05T02:05:16.332095+09:00"
