@@ -1,5 +1,13 @@
 # Bitnami Common Library Chart
 
+> **In this repository this chart is a vendored dependency, not a product.**
+> It is not published to <https://shepherd44.github.io/helm-charts/docs> and cannot be
+> installed on its own — it is a Helm library chart, so it renders no resources.
+> `charts/mongodb-sharded` pulls it in as `repository: file://../common`, and
+> `helm dependency update` bundles it into that chart's package. Upstream's usage
+> instructions below describe consuming it from bitnami's OCI registry; here it comes
+> from the sibling directory instead.
+
 A [Helm Library Chart](https://helm.sh/docs/topics/library_charts/#helm) for grouping common logic between Bitnami charts.
 
 ## TL;DR

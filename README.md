@@ -1,22 +1,63 @@
 # Helm Charts
 
-Charts published through GitHub Pages at <https://shepherd44.github.io/helm-charts/docs>.
+A Helm chart repository, served as static files from GitHub Pages.
+
+| | |
+|---|---|
+| Chart repo URL | `https://shepherd44.github.io/helm-charts/docs` |
+| Index | <https://shepherd44.github.io/helm-charts/docs/index.yaml> |
+| Source | <https://github.com/shepherd44/helm-charts> |
+
+There is no marketplace listing — this is a plain Helm HTTP repo, so it is added by URL
+rather than found by name. Nothing needs to be installed on the cluster to use it.
 
 ## Use
 
 ```shell
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
-helm repo update
-helm search repo shepherd44
+helm repo update shepherd44
+
+helm search repo shepherd44            # what is available
+helm search repo shepherd44 --versions # every published version
+```
+
+Install, pinning the chart version so a later release cannot change a deployment
+underneath you:
+
+```shell
+helm install my-release shepherd44/mongodb-sharded \
+  --version 9.4.17 \
+  --namespace my-namespace --create-namespace \
+  -f my-values.yaml
+```
+
+```shell
+helm upgrade my-release shepherd44/mongodb-sharded --version <new> -f my-values.yaml
+helm uninstall my-release
+```
+
+Each chart's own README documents its values and a working install for that chart.
+
+Using it from Argo CD — the repo is a Helm source like any other:
+
+```yaml
+sources:
+  - repoURL: https://shepherd44.github.io/helm-charts/docs
+    chart: mongodb-sharded
+    targetRevision: 9.4.17
+    helm:
+      valueFiles: [...]
 ```
 
 ## Charts
 
-| chart | app | notes |
+| chart | app | install notes |
 |---|---|---|
-| `cp-schema-registry` | Confluent Schema Registry | |
-| `mongodb-sharded` | MongoDB 8.0 | fork of `bitnami/mongodb-sharded`, images from [shepherd44/containers](https://github.com/shepherd44/containers) |
-| `common` | — | bitnami library chart, dependency only, not published |
+| [`cp-schema-registry`](charts/cp-schema-registry/README.md) | Confluent Schema Registry | needs an existing Kafka; fork of the archived confluent chart |
+| [`mongodb-sharded`](charts/mongodb-sharded/README.md) | MongoDB 8.0 | fork of `bitnami/mongodb-sharded`, images from [shepherd44/containers](https://github.com/shepherd44/containers) |
+| [`common`](charts/common/README.md) | — | bitnami library chart, dependency of `mongodb-sharded`, not published |
+
+Each chart README has an install section with a values file worth starting from.
 
 ### mongodb-sharded: which MongoDB series
 

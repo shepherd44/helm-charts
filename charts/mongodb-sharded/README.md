@@ -42,12 +42,87 @@ MongoDB&reg; is an open source NoSQL database that uses JSON for data storage. M
 
 Disclaimer: The respective trademarks mentioned in the offering are owned by the respective companies. We do not provide a commercial license for any of these products. This listing has an open-source license. MongoDB&reg; is run and maintained by MongoDB, which is a completely separate project from Bitnami.
 
-## TL;DR
+## Install
 
 ```console
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
-helm install my-release shepherd44/mongodb-sharded
+helm repo update shepherd44
+helm install my-release shepherd44/mongodb-sharded --version 9.4.17
 ```
+
+Pin `--version`. This is a fork with its own version line, so a later release here is
+not the same content as the bitnami release carrying that number.
+
+A sharded MongoDB is stateful and the defaults are not production settings. A realistic
+install passes a values file:
+
+```console
+helm install my-release shepherd44/mongodb-sharded \
+  --version 9.4.17 \
+  --namespace mongodb --create-namespace \
+  -f my-values.yaml
+```
+
+```yaml
+# my-values.yaml — the values that actually decide the shape of the cluster
+shards: 2
+
+auth:
+  enabled: true
+  existingSecret: mongodb-credentials   # keys: mongodb-root-password, mongodb-replica-set-key
+
+configsvr:
+  replicaCount: 3
+  persistence:
+    enabled: true
+    size: 16Gi
+
+shardsvr:
+  dataNode:
+    replicaCount: 2
+    resources:
+      requests: { cpu: 2000m, memory: 4Gi }
+      limits:   { cpu: 3000m, memory: 6Gi }
+  persistence:
+    enabled: true
+    size: 200Gi
+    storageClass: ""      # set this; the cluster default is rarely what you want here
+
+mongos:
+  replicaCount: 2
+
+metrics:
+  enabled: true           # prometheus exporter sidecar on every pod
+  podMonitor:
+    enabled: true         # without this nothing scrapes the sidecar
+```
+
+`auth.rootPassword` and `auth.replicaSetKey` exist for convenience, but they land in the
+release manifest in plain text. Use `auth.existingSecret` for anything real.
+
+Set `shardsvr.persistence.storageClass` explicitly. Falling back to the cluster default
+StorageClass on a database is how a shard ends up on the wrong storage tier.
+
+To run a MongoDB version other than the 8.0 default, name the tag — see the fork notice
+above for why 8.2 is opt-in and what an upgrade across series actually involves:
+
+```console
+--set image.tag=8.2.12-debian-12-latest
+```
+
+Uninstall leaves the PVCs behind on purpose. Removing them destroys the data:
+
+```console
+helm uninstall my-release --namespace mongodb
+kubectl get pvc -n mongodb                    # datadir-my-release-mongodb-sharded-*
+kubectl delete pvc -n mongodb datadir-...     # only if you mean it
+```
+
+The StatefulSet volume claim templates carry no chart labels, so there is no label
+selector that picks these PVCs out — delete them by name, having looked at the list.
+
+The parameter reference below is upstream's and still applies; the images and the
+`common` dependency are the parts this fork changed.
 
 ## Why use Bitnami Secure Images?
 
@@ -83,15 +158,10 @@ This chart uses the [sharding method](https://docs.mongodb.com/manual/sharding/)
 
 ## Installing the Chart
 
-To install the chart with the release name `my-release`:
+See [Install](#install) at the top of this document. Upstream's text here pointed at
+bitnami's OCI registry, which does not serve this fork.
 
-```console
-helm install my-release oci://REGISTRY_NAME/REPOSITORY_NAME/mongodb-sharded
-```
-
-> Note: You need to substitute the placeholders `REGISTRY_NAME` and `REPOSITORY_NAME` with a reference to your Helm chart registry and repository. For example, in the case of Bitnami, you need to use `REGISTRY_NAME=registry-1.docker.io` and `REPOSITORY_NAME=bitnamicharts`.
-
-The command deploys MongoDB&reg; on the Kubernetes cluster in the default configuration. The [Parameters](#parameters) section lists the parameters that can be configured during installation.
+The [Parameters](#parameters) section below lists what can be configured.
 
 > **Tip**: List all releases using `helm list`
 
