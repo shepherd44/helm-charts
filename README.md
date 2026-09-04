@@ -18,6 +18,30 @@ helm search repo shepherd44
 | `mongodb-sharded` | MongoDB 8.0 | fork of `bitnami/mongodb-sharded`, images from [shepherd44/containers](https://github.com/shepherd44/containers) |
 | `common` | — | bitnami library chart, dependency only, not published |
 
+### mongodb-sharded: which MongoDB series
+
+The chart defaults to the latest **8.0** patch, currently `8.0.30-debian-12-latest`.
+8.0 is the LTS series; that is the only series this chart is expected to run.
+
+An 8.2 image is built alongside it, but 8.2 is a rapid release, not LTS. Use it only
+by naming it explicitly, per deployment:
+
+```shell
+--set image.tag=8.2.12-debian-12-latest
+```
+
+Do not make 8.2 the chart default. The chart's `appVersion` and `annotations.images`
+track 8.0, so an 8.2 override is reported as a retagged image in NOTES (a warning, not
+a failure). Upstream never shipped an 8.2 chart line either — bitnami's
+`mongodb-sharded` chart has been pinned to appVersion 8.0.13 since 2025-08-25.
+
+8.0 -> 8.2 is a data upgrade, not a tag swap: it needs an FCV bump and a rollout in
+config server -> shard data -> mongos order.
+
+Bumping the 8.0 patch is a two-step change: raise `version` in the
+[containers workflow matrix](https://github.com/shepherd44/containers/blob/main/.github/workflows/mongodb-sharded.yml),
+then point `image.tag` and `appVersion` here at the new build.
+
 ## Release
 
 ```shell
