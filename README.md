@@ -53,7 +53,7 @@ sources:
 
 | chart | app | install notes |
 |---|---|---|
-| [`cp-schema-registry`](charts/cp-schema-registry/README.md) | Confluent Schema Registry | needs an existing Kafka; fork of the archived confluent chart |
+| [`cp-schema-registry`](charts/cp-schema-registry/README.md) | Confluent Schema Registry 7.9 | needs an existing Kafka; the upstream confluent chart is gone, this is the only copy |
 | [`mongodb-sharded`](charts/mongodb-sharded/README.md) | MongoDB 8.0 | fork of `bitnami/mongodb-sharded`, images from [shepherd44/containers](https://github.com/shepherd44/containers) |
 | [`common`](charts/common/README.md) | — | bitnami library chart, dependency of `mongodb-sharded`, not published |
 

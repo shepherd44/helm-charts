@@ -13,7 +13,7 @@ schema_registry:
   ## Image Info
   ## ref: https://hub.docker.com/r/confluentinc/cp-schema-registry/
   image: confluentinc/cp-schema-registry
-  imageTag: 7.5.3
+  imageTag: 7.9.9
 
   ## Specify a imagePullPolicy
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -23,9 +23,6 @@ schema_registry:
   ## Secrets must be manually created in the namespace.
   ## ref: https://kubernetes.io/docs/concepts/containers/images/#specifying-imagepullsecrets-on-a-pod
   imagePullSecrets:
-
-  metrics:
-    enabled: true
 
   ## Schema Registry Settings Overrides
   ## Configuration Options can be found here: https://docs.confluent.io/current/schema-registry/docs/config.html
@@ -38,6 +35,9 @@ schema_registry:
   servicePort: 8081
 
   ## Schema registry JVM Heap Option
+  ## NOTE: not wired up. The deployment template has SCHEMA_REGISTRY_HEAP_OPTS
+  ## commented out, so setting this changes nothing. Left in place rather than
+  ## removed because enabling it would change the heap of running deployments.
   heapOptions: "-Xms512M -Xmx512M"
 
   ## You can list load balanced service endpoint, or list of all brokers (which is hard in K8s).  e.g.:
@@ -93,9 +93,16 @@ schema_registry:
     ## JMX Exporter Configuration
     ## ref: https://github.com/prometheus/jmx_exporter
     jmx:
-      enabled: true
-      image: solsson/kafka-prometheus-jmx-exporter@sha256
-      imageTag: 6f82e2b0464f50da8104acd7363fb9b995001ddff77d248379f8788e78946143
+      ## Opt-in. The sidecar is a second JVM in every pod and this chart ships no
+      ## ServiceMonitor/PodMonitor — it only sets prometheus.io/scrape annotations,
+      ## which a Prometheus Operator setup ignores. Turn it on only once something
+      ## is actually configured to scrape port 5556.
+      enabled: false
+      ## Built from https://github.com/shepherd44/containers (jmx_prometheus_standalone).
+      ## The image's entrypoint is the jar, so the deployment passes only args.
+      ## Swapping this for another image means matching that contract.
+      image: shepherd9664/jmx-exporter
+      imageTag: 1.6.0-latest
       imagePullPolicy: IfNotPresent
       port: 5556
 

@@ -15,13 +15,25 @@ This chart bootstraps a deployment of a Confluent Schema Registry
 
 * [DockerHub -> ConfluentInc](https://hub.docker.com/u/confluentinc/)
 
+## Version
+
+| | |
+|---|---|
+| Chart | `0.2.0` |
+| Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
+
+Confluent supports each Community release for two years from its minor release date.
+7.9.x runs out on 2027-02-19. The 7.5.x this chart used to ship ended 2025-08-25.
+
+The JMX exporter sidecar is **off by default** — see [Metrics](#metrics).
+
 ## Install
 
 ```console
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.1.1 \
+  --version 0.2.0 \
   --set schema_registry.kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
@@ -32,7 +44,7 @@ With a values file:
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.1.1 -f my-values.yaml
+  --version 0.2.0 -f my-values.yaml
 ```
 
 ```yaml
@@ -69,6 +81,37 @@ kubectl port-forward svc/my-schema-registry-cp-schema-registry 8081:8081
 curl localhost:8081/subjects
 ```
 
+## Metrics
+
+`schema_registry.prometheus.jmx.enabled` runs a JMX exporter sidecar on port 5556. It is
+**off by default**, for two reasons:
+
+- it is a second JVM in every pod (~77Mi in the deployments this chart came from), and
+- the chart creates no ServiceMonitor or PodMonitor. It only sets `prometheus.io/scrape`
+  annotations, which a Prometheus Operator install ignores. Enabled but unscraped is the
+  state this chart was in.
+
+Turn it on only once something is configured to scrape port 5556:
+
+```console
+--set schema_registry.prometheus.jmx.enabled=true
+```
+
+The sidecar image is `shepherd9664/jmx-exporter`, built from
+[shepherd44/containers](https://github.com/shepherd44/containers) on
+[jmx_prometheus_standalone](https://github.com/prometheus/jmx_exporter) 1.6.0. There is
+no maintained public image for this — `solsson/kafka-prometheus-jmx-exporter`, which
+this chart used to run, was last pushed in 2020 on a JDK 8 base.
+
+Its entrypoint is the jar, so the deployment passes only `args` (port, config file).
+Pointing `schema_registry.prometheus.jmx.image` at a different image means matching that
+contract; an image expecting `java -jar ...` to be spelled out in `command` will not
+start.
+
+The exporter config lives in a ConfigMap the chart renders, scraping three MBeans:
+`jetty-metrics`, `jersey-metrics`, and `master-slave-role`. That last name is unchanged
+through Confluent Platform 8.3, despite how it reads.
+
 ## Configuration
 
 Every parameter lives under the `schema_registry` key — this chart nests them, unlike the
@@ -85,14 +128,14 @@ helm install my-schema-registry shepherd44/cp-schema-registry \
 | --------- | ----------- | ------- |
 | `schema_registry.replicaCount` | Number of Schema Registry servers | `1` |
 | `schema_registry.image` | Image repository | `confluentinc/cp-schema-registry` |
-| `schema_registry.imageTag` | Image tag | `7.5.3` |
+| `schema_registry.imageTag` | Image tag | `7.9.9` |
 | `schema_registry.imagePullPolicy` | Image pull policy | `IfNotPresent` |
 | `schema_registry.imagePullSecrets` | Secrets for private registries | unset |
 | `schema_registry.kafka.bootstrapServers` | Kafka bootstrap servers. **Required** | `""` |
 | `schema_registry.configurationOverrides` | Schema Registry [configuration](https://docs.confluent.io/current/schema-registry/docs/config.html) overrides | `{}` |
 | `schema_registry.customEnv` | Extra environment variables | `{}` |
 | `schema_registry.servicePort` | Service port | `8081` |
-| `schema_registry.heapOptions` | JVM heap options | `-Xms512M -Xmx512M` |
+| `schema_registry.heapOptions` | JVM heap options. **Not wired up** — the template has `SCHEMA_REGISTRY_HEAP_OPTS` commented out | `-Xms512M -Xmx512M` |
 | `schema_registry.schemaRegistryOpts` | Extra `SCHEMA_REGISTRY_OPTS` | unset |
 | `schema_registry.resources` | Requests and limits | `{}` |
 | `schema_registry.podAnnotations` | Annotations on the pod | `{}` |
@@ -104,9 +147,9 @@ helm install my-schema-registry shepherd44/cp-schema-registry \
 | `schema_registry.securityContext.fsGroup` | Supplementary GID | `1000` |
 | `schema_registry.securityContext.runAsNonRoot` | Refuse to run as root | `true` |
 | `schema_registry.jmx.port` | JMX port | `5555` |
-| `schema_registry.prometheus.jmx.enabled` | Run the JMX exporter as a sidecar | `true` |
-| `schema_registry.prometheus.jmx.image` | Exporter image | `solsson/kafka-prometheus-jmx-exporter@sha256` |
-| `schema_registry.prometheus.jmx.imageTag` | Exporter image tag (a digest) | see [values.yaml](values.yaml) |
+| `schema_registry.prometheus.jmx.enabled` | Run the JMX exporter as a sidecar | `false` |
+| `schema_registry.prometheus.jmx.image` | Exporter image | `shepherd9664/jmx-exporter` |
+| `schema_registry.prometheus.jmx.imageTag` | Exporter image tag | `1.6.0-latest` |
 | `schema_registry.prometheus.jmx.imagePullPolicy` | Exporter pull policy | `IfNotPresent` |
 | `schema_registry.prometheus.jmx.port` | Exporter port | `5556` |
 | `schema_registry.prometheus.jmx.resources` | Exporter requests and limits | `{}` |
@@ -115,9 +158,6 @@ helm install my-schema-registry shepherd44/cp-schema-registry \
 | `fullnameOverride` | Override the full release name | unset |
 | `overrideGroupId` | Override the Schema Registry group id | unset |
 
-`schema_registry.metrics.enabled` appears in `values.yaml` but no template reads it.
-Setting it does nothing; the exporter is controlled by
+`schema_registry.metrics.enabled` used to sit in `values.yaml` doing nothing — no
+template read it. Removed in 0.2.0; the sidecar is controlled by
 `schema_registry.prometheus.jmx.enabled`.
-
-The exporter sidecar exposes Prometheus metrics on `5556`, but this chart ships no
-ServiceMonitor or PodMonitor — scraping has to be arranged separately.

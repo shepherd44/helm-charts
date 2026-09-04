@@ -38,14 +38,11 @@ spec:
         - name: prometheus-jmx-exporter
           image: "{{ .Values.schema_registry.prometheus.jmx.image }}:{{ .Values.schema_registry.prometheus.jmx.imageTag }}"
           imagePullPolicy: "{{ .Values.schema_registry.prometheus.jmx.imagePullPolicy }}"
-          command:
-          - java
-          - -XX:+UnlockExperimentalVMOptions
-          - -XX:+UseCGroupMemoryLimitForHeap
-          - -XX:MaxRAMFraction=1
-          - -XshowSettings:vm
-          - -jar
-          - jmx_prometheus_httpserver.jar
+          {{/* The image entrypoint is `java -jar jmx_prometheus_standalone.jar`, so
+          only args are passed. The command this replaced carried
+          -XX:+UseCGroupMemoryLimitForHeap and -XX:MaxRAMFraction=1, which JDK 11
+          removed; they only worked because that image was JDK 8. */}}
+          args:
           - {{ .Values.schema_registry.prometheus.jmx.port | quote }}
           - /etc/jmx-schema-registry/jmx-schema-registry-prometheus.yml
           ports:

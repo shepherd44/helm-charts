@@ -1,5 +1,12 @@
-apiVersion: v1
-appVersion: "7.5.3"
-description: A Helm chart for Confluent Schema Registry on Kubernetes
+apiVersion: v2
 name: cp-schema-registry
-version: 0.1.1
+description: A Helm chart for Confluent Schema Registry on Kubernetes
+type: application
+version: 0.2.0
+appVersion: "7.9.9"
+keywords:
+  - kafka
+  - schema-registry
+  - confluent
+sources:
+  - https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
