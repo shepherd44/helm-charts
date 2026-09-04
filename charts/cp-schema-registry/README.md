@@ -25,6 +25,10 @@ This chart bootstraps a deployment of a Confluent Schema Registry
 Confluent supports each Community release for two years from its minor release date.
 7.9.x runs out on 2027-02-19. The 7.5.x this chart used to ship ended 2025-08-25.
 
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) — what changed in each chart version
+- [docs/schema-registry-versions.md](docs/schema-registry-versions.md) — which Schema
+  Registry version to pin, the support lifecycle, and what actually differs between them
+
 The JMX exporter sidecar is **off by default** — see [Metrics](#metrics).
 
 ## Install
