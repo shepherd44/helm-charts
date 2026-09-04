@@ -56,3 +56,33 @@ helm repo index docs --url https://shepherd44.github.io/helm-charts/docs --merge
 
 Then commit `docs/` and push to `main`. GitHub Pages serves the repo root of `main`,
 so `docs/index.yaml` is live once the Pages build finishes.
+
+Tag the release commit:
+
+```shell
+git tag -a $CHART-$VERSION -m "..."
+git push origin $CHART-$VERSION
+```
+
+Tags are `<chart>-<version>` because this repo holds more than one chart. The tag
+message records what the release is; for a forked chart it also records the upstream
+version and commit it was based on, and the local changes applied on top.
+
+## Versioning a forked chart
+
+`mongodb-sharded` is a fork, so its version number has to come from somewhere. The rule
+here:
+
+- Vendor upstream verbatim first, keeping upstream's own version. That commit is the base.
+- Every local change takes the next number in **our** line. 9.4.15 was the last shared
+  number; from 9.4.16 on, the line is ours and no longer lines up with bitnami's.
+- Do not reuse upstream's version for a chart carrying local changes. Two different charts
+  with one version number is the thing that actually breaks people.
+
+Because the numbers diverge, the base has to be written down rather than inferred. It
+lives in two places: the release tag message, and the fork notice at the top of the
+chart's own README.
+
+To pick up a later bitnami release: re-vendor that version as a standalone commit,
+re-apply the local diff on top, update the fork notice and the tag message with the new
+base, and publish as the next number in our line.
