@@ -135,9 +135,27 @@ config and logs inside the container.
 of `minAvailable: 1` does not protect anything, it just blocks node drains. Enable it
 with two or more replicas.
 
-`schema_registry.heapOptions` is passed as `SCHEMA_REGISTRY_HEAP_OPTS` when set, and is
-empty by default so the JVM keeps its own container-aware sizing. Set it together with
-`resources.limits.memory`, not on its own.
+`schema_registry.resources` is empty by default, and that is worth understanding before
+leaving it that way. With no `limits.memory`, the container's cgroup reports no limit, so
+the JVM sizes its heap from the **node**, not the container. Measured on a 257Gi node:
+
+```
+/sys/fs/cgroup/memory.max  ->  max
+MaxRAMPercentage           =  25.0
+MaxHeapSize                =  32178700288   (30GiB)
+actual usage               =  288Mi
+```
+
+Nothing stops that heap from growing into the node. Setting `limits.memory` is what makes
+the JVM container-aware; with a 1Gi limit the same JVM reports a 256Mi max heap.
+
+`schema_registry.heapOptions` is passed as `SCHEMA_REGISTRY_HEAP_OPTS` when set and is
+empty by default. Set it together with `limits.memory` rather than on its own — an `-Xmx`
+above the limit gets the pod OOMKilled instead of throwing `OutOfMemoryError`.
+
+The chart ships no default here on purpose: adding one would drop a memory limit onto
+existing releases that currently run without one, turning a working deployment into an
+OOMKill candidate at the next upgrade. Set it per deployment.
 
 The Schema Registry container is rendered first and the pod carries
 `kubectl.kubernetes.io/default-container`, so `kubectl logs`/`exec` without `-c` reach
