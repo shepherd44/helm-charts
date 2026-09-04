@@ -5,6 +5,31 @@ Chart versions of `cp-schema-registry`. The chart's own line, not Confluent's �
 
 Each release is tagged in git as `cp-schema-registry-<version>`.
 
+## 0.5.0
+
+Acting on the field inventory in
+[schema-registry-versions.md](schema-registry-versions.md).
+
+- **`master.eligibility` → `leader.eligibility`.** The chart hardcoded
+  `SCHEMA_REGISTRY_MASTER_ELIGIBILITY`, which carries `@Deprecated` upstream. It is now
+  `leader.eligibility`, exposed as `schema_registry.leaderEligibility` rather than fixed
+  at `true`. Both spellings are still registered at 8.3.1, so this is not a forced move —
+  it just stops the chart from being the thing that uses the deprecated one.
+- **`configurationOverrides` no longer duplicates env.** The keys the chart sets itself
+  and the user's overrides are merged before rendering, overrides winning, so each
+  variable is emitted once. Previously setting e.g. `kafkastore.group.id` produced
+  `SCHEMA_REGISTRY_KAFKASTORE_GROUP_ID` twice; Kubernetes takes the last, so it worked by
+  accident.
+- **`host.name` is overridable.** It defaults to the pod IP via fieldRef; setting
+  `host.name` in `configurationOverrides` now replaces that instead of colliding with it.
+- **Deprecation warning at install time.** `NOTES.txt` checks `configurationOverrides`
+  against the six keys marked `@Deprecated` in 8.3.0 and names the replacement for each.
+  Setting `master.eligibility` explicitly also suppresses the chart's `leader.eligibility`
+  so the two spellings cannot disagree.
+- **NOTES.txt rewritten.** It said only that this is a modified Confluent chart. It now
+  gives the REST endpoint, the port-forward, where schemas live, and warns that an
+  enabled Ingress exposes a writable API on a service with no authentication.
+
 ## 0.4.0
 
 - **Ingress** (`schema_registry.ingress`), off by default. `name` overrides the Ingress

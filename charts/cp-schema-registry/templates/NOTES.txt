@@ -1,3 +1,45 @@
-This chart installs a Confluent Kafka Schema Registry
-- modified from 'https://github.com/confluentinc/schema-registry'
+Confluent Schema Registry {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}).
 
+Fork of the deleted confluentinc/cp-helm-charts:
+https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+
+REST API:
+  in-cluster  http://{{ include "cp-schema-registry.fullname" . }}:{{ .Values.schema_registry.servicePort }}
+  port-forward
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "cp-schema-registry.fullname" . }} {{ .Values.schema_registry.servicePort }}:{{ .Values.schema_registry.servicePort }}
+    curl localhost:{{ .Values.schema_registry.servicePort }}/subjects
+{{- if .Values.schema_registry.ingress.enabled }}
+{{- range .Values.schema_registry.ingress.hosts }}
+  ingress     http://{{ .host }}
+{{- end }}
+
+  NOTE: Schema Registry has no authentication of its own. This Ingress exposes a
+  writable API — anything that can reach it can register or delete schemas.
+{{- end }}
+
+Schemas live in the {{ index (fromYaml (include "cp-schema-registry.config" .)) "kafkastore.topic" | default "_schemas" }} Kafka topic, not on disk, so replacing pods
+does not lose them.
+
+{{- $deprecated := fromYaml (include "cp-schema-registry.deprecatedConfig" .) }}
+{{- $cfg := .Values.schema_registry.configurationOverrides | default dict }}
+{{- $found := list }}
+{{- range $key, $replacement := $deprecated }}
+{{- if hasKey $cfg $key }}
+{{- $found = append $found (printf "%s -> %s" $key $replacement) }}
+{{- end }}
+{{- end }}
+{{- if $found }}
+
+WARNING: deprecated configuration keys in configurationOverrides.
+
+These still work in Schema Registry 8.3 and are still accepted, but they carry
+@Deprecated upstream and should be moved to their replacements:
+{{- range $found }}
+  - {{ . }}
+{{- end }}
+{{- end }}
+{{- if not .Values.schema_registry.leaderEligibility }}
+
+NOTE: leaderEligibility is false, so no pod in this release can become the writer.
+Schema registration will fail unless another release is eligible.
+{{- end }}

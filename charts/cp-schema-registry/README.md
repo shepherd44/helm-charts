@@ -19,7 +19,7 @@ This chart bootstraps a deployment of a Confluent Schema Registry
 
 | | |
 |---|---|
-| Chart | `0.4.0` |
+| Chart | `0.5.0` |
 | Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
 
 Confluent supports each Community release for two years from its minor release date.
@@ -37,7 +37,7 @@ The JMX exporter sidecar is **off by default** — see [Metrics](#metrics).
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.4.0 \
+  --version 0.5.0 \
   --set schema_registry.kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
@@ -48,7 +48,7 @@ With a values file:
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.4.0 -f my-values.yaml
+  --version 0.5.0 -f my-values.yaml
 ```
 
 ```yaml
@@ -84,6 +84,49 @@ locally:
 kubectl port-forward svc/my-schema-registry-cp-schema-registry 8081:8081
 curl localhost:8081/subjects
 ```
+
+## Configuration
+
+`schema_registry.configurationOverrides` becomes `SCHEMA_REGISTRY_*` environment, and
+**takes precedence over the keys the chart sets itself** — `listeners`,
+`kafkastore.bootstrap.servers`, `kafkastore.group.id`, `leader.eligibility`, `host.name`.
+Before 0.5.0 overriding one of those emitted the variable twice; last-wins made it
+mostly work, but it was not something to rely on.
+
+```yaml
+schema_registry:
+  configurationOverrides:
+    kafkastore.topic: _schemas
+    schema.compatibility.level: full
+    kafkastore.topic.replication.factor: "3"
+```
+
+`host.name` defaults to the pod IP via fieldRef. Setting it in
+`configurationOverrides` replaces that entirely, which is what you want when instances
+must advertise a routable name rather than a pod IP.
+
+`schema_registry.leaderEligibility` controls `leader.eligibility` — whether an instance
+may be elected the writer. Set it false only when another release is eligible; with no
+eligible instance anywhere, schema registration fails.
+
+The chart warns at install time when `configurationOverrides` contains a key that carries
+`@Deprecated` upstream. All six still work in 8.3, so the warning is a nudge, not a
+failure:
+
+| Deprecated | Use instead |
+|---|---|
+| `master.eligibility` | `leader.eligibility` |
+| `avro.compatibility.level` | `schema.compatibility.level` |
+| `kafkastore.connection.url` | `kafkastore.bootstrap.servers` |
+| `schema.registry.resource.extension.class` | `resource.extension.class` |
+| `schema.registry.inter.instance.protocol` | `inter.instance.protocol` |
+| `ssl.client.auth` | `ssl.client.authentication` |
+
+Setting `master.eligibility` explicitly makes the chart stop emitting
+`leader.eligibility`, so the two spellings never disagree.
+
+[docs/schema-registry-versions.md](docs/schema-registry-versions.md) has the full field
+inventory: what exists, what appeared in which version, and what the chart sets.
 
 ## Ingress
 
@@ -236,7 +279,8 @@ helm install my-schema-registry shepherd44/cp-schema-registry \
 | `schema_registry.imagePullPolicy` | Image pull policy | `IfNotPresent` |
 | `schema_registry.imagePullSecrets` | Secrets for private registries | unset |
 | `schema_registry.kafka.bootstrapServers` | Kafka bootstrap servers. **Required** | `""` |
-| `schema_registry.configurationOverrides` | Schema Registry [configuration](https://docs.confluent.io/current/schema-registry/docs/config.html) overrides | `{}` |
+| `schema_registry.configurationOverrides` | Schema Registry configuration; wins over chart-set keys | `{}` |
+| `schema_registry.leaderEligibility` | `leader.eligibility` — may this instance become the writer | `true` |
 | `schema_registry.customEnv` | Extra environment variables | `{}` |
 | `schema_registry.servicePort` | Service port | `8081` |
 | `schema_registry.heapOptions` | `SCHEMA_REGISTRY_HEAP_OPTS`; omitted when empty | `""` |

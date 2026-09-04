@@ -91,3 +91,43 @@ app.kubernetes.io/part-of: {{ template "cp-schema-registry.name" . }}
 app.kubernetes.io/component: schema-registry
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end -}}
+
+
+{{/*
+Schema Registry config that ends up as SCHEMA_REGISTRY_* env.
+
+The chart sets a few keys itself. Rendering those separately from
+configurationOverrides meant a user who set the same key got the variable twice —
+legal, last-wins, but undefined-looking. Merge instead, with configurationOverrides
+winning, so every key is emitted exactly once.
+
+host.name is not here: it is a fieldRef, not a value. The deployment emits it only
+when configurationOverrides does not set it.
+*/}}
+{{- define "cp-schema-registry.config" -}}
+{{- $overrides := .Values.schema_registry.configurationOverrides | default dict -}}
+{{- $managed := dict
+      "listeners" (printf "http://0.0.0.0:%v" .Values.schema_registry.servicePort)
+      "kafkastore.bootstrap.servers" (include "cp-schema-registry.kafka.bootstrapServers" .)
+      "kafkastore.group.id" (include "cp-schema-registry.groupId" .)
+-}}
+{{/* Setting both spellings leaves it ambiguous which one Schema Registry honours,
+     so the deprecated one being present explicitly means the chart stays out. */}}
+{{- if not (hasKey $overrides "master.eligibility") -}}
+{{- $_ := set $managed "leader.eligibility" (.Values.schema_registry.leaderEligibility | toString) -}}
+{{- end -}}
+{{- toYaml (merge (deepCopy $overrides) $managed) -}}
+{{- end -}}
+
+{{/*
+Config keys carrying @Deprecated in Schema Registry 8.3.0, with their replacement.
+Still accepted, so this only drives a warning in NOTES.txt.
+*/}}
+{{- define "cp-schema-registry.deprecatedConfig" -}}
+master.eligibility: leader.eligibility
+avro.compatibility.level: schema.compatibility.level
+kafkastore.connection.url: kafkastore.bootstrap.servers
+schema.registry.resource.extension.class: resource.extension.class
+schema.registry.inter.instance.protocol: inter.instance.protocol
+ssl.client.auth: ssl.client.authentication
+{{- end -}}

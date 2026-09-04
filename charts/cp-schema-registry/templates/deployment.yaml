@@ -55,26 +55,21 @@ spec:
           resources:
 {{ toYaml .Values.schema_registry.resources | indent 12 }}
           env:
+          {{- $cfg := fromYaml (include "cp-schema-registry.config" .) }}
+          {{- if not (hasKey $cfg "host.name") }}
           - name: SCHEMA_REGISTRY_HOST_NAME
             valueFrom:
               fieldRef:
                 fieldPath: status.podIP
-          - name: SCHEMA_REGISTRY_LISTENERS
-            value: http://0.0.0.0:{{ .Values.schema_registry.servicePort }}
-          - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
-            value: {{ template "cp-schema-registry.kafka.bootstrapServers" . }}
-          - name: SCHEMA_REGISTRY_KAFKASTORE_GROUP_ID
-            value: {{ template "cp-schema-registry.groupId" . }}
-          - name: SCHEMA_REGISTRY_MASTER_ELIGIBILITY
-            value: "true"
+          {{- end }}
           {{- with .Values.schema_registry.heapOptions }}
           - name: SCHEMA_REGISTRY_HEAP_OPTS
             value: {{ . | quote }}
           {{- end }}
-          {{ range $configName, $configValue := .Values.schema_registry.configurationOverrides }}
+          {{- range $configName, $configValue := $cfg }}
           - name: SCHEMA_REGISTRY_{{ $configName | replace "." "_" | upper }}
             value: {{ $configValue | quote }}
-          {{ end }}
+          {{- end }}
           {{- range $key, $value := .Values.schema_registry.customEnv }}
           - name: {{ $key | quote }}
             value: {{ $value | quote }}
