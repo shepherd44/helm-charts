@@ -42,10 +42,34 @@ Bumping the 8.0 patch is a two-step change: raise `version` in the
 [containers workflow matrix](https://github.com/shepherd44/containers/blob/main/.github/workflows/mongodb-sharded.yml),
 then point `image.tag` and `appVersion` here at the new build.
 
+### mongodb-sharded: images
+
+Bitnami moved its public catalog to `bitnamilegacy` and stopped updating it, so every
+image this chart references is built in
+[shepherd44/containers](https://github.com/shepherd44/containers) instead. No
+`bitnamilegacy` image is left.
+
+| values path | image | what it is |
+|---|---|---|
+| `image` | `shepherd9664/mongodb-sharded` | bitnami scaffolding, `mongod`/`mongos` replaced by the official MongoDB debian12 build |
+| `volumePermissions.image` | `shepherd9664/os-shell` | minideb plus the same shell tooling, minus four bitnami helper binaries with no upstream source |
+| `metrics.image` | `shepherd9664/mongodb-exporter` | Percona's official release binary at the path the chart calls |
+
+Changing a tag here does nothing until that build exists — check Docker Hub first.
+
+When you repoint an image, update `annotations.images` in `Chart.yaml` to match. The
+bundled `common` library checks every rendered image against that list. On the upstream
+chart, whose list names `docker.io/bitnami/*`, a substituted image is a hard failure —
+which is why the fork had to rewrite the annotation rather than only edit `values.yaml`.
+Now that the list names our own registry, a mismatch is a warning rather than an error,
+so nothing will stop a stale annotation; keep it honest by hand. Setting
+`global.security.allowInsecureImages` only silences the check and is not the fix.
+
 ## Release
 
 ```shell
 CHART=mongodb-sharded
+VERSION=$(awk '/^version:/{print $2}' charts/$CHART/Chart.yaml)
 
 # charts with dependencies only
 helm dependency update ./charts/$CHART
@@ -53,6 +77,10 @@ helm dependency update ./charts/$CHART
 helm package ./charts/$CHART --destination docs
 helm repo index docs --url https://shepherd44.github.io/helm-charts/docs --merge docs/index.yaml
 ```
+
+`--merge` keeps the `created` timestamps of charts this release did not touch.
+A published `.tgz` is immutable: to change a chart, bump its version rather than
+repackaging one that is already live.
 
 Then commit `docs/` and push to `main`. GitHub Pages serves the repo root of `main`,
 so `docs/index.yaml` is live once the Pages build finishes.
@@ -86,3 +114,11 @@ chart's own README.
 To pick up a later bitnami release: re-vendor that version as a standalone commit,
 re-apply the local diff on top, update the fork notice and the tag message with the new
 base, and publish as the next number in our line.
+
+## License
+
+`mongodb-sharded` and `common` are forks of
+[bitnami/charts](https://github.com/bitnami/charts), Apache-2.0. Each chart directory
+keeps upstream's `LICENSE.md`, and the fork notice at the top of the chart's README
+records the base version, the base commit, and every local change — which is what
+Apache-2.0 section 4(b) asks for.
