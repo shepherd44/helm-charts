@@ -3,7 +3,7 @@ entries:
   cp-schema-registry:
   - apiVersion: v1
     appVersion: 7.5.3
-    created: "2026-09-04T21:59:25.725081+09:00"
+    created: "2026-09-04T22:08:57.39108+09:00"
     description: A Helm chart for Confluent Schema Registry on Kubernetes
     digest: dfb55366bccdf4b3b708cf3ecef0427de3b50eaca922c960b9f96554d4b605ff
     name: cp-schema-registry
@@ -14,16 +14,16 @@ entries:
   - annotations:
       images: |
         - name: mongodb-exporter
-          image: docker.io/bitnamilegacy/mongodb-exporter:0.47.0-debian-12-r1
+          image: docker.io/shepherd9664/mongodb-exporter:0.53.0-debian-12-latest
         - name: mongodb-sharded
           image: docker.io/shepherd9664/mongodb-sharded:8.0.30-debian-12-latest
         - name: os-shell
-          image: docker.io/bitnamilegacy/os-shell:12-debian-12-r51
+          image: docker.io/shepherd9664/os-shell:12-debian-12-latest
       licenses: Apache-2.0
       tanzuCategory: service
     apiVersion: v2
     appVersion: 8.0.30
-    created: "2026-09-04T21:59:25.727851+09:00"
+    created: "2026-09-04T22:08:57.393299+09:00"
     dependencies:
     - name: common
       repository: file://../common
@@ -33,7 +33,7 @@ entries:
     description: MongoDB(R) is an open source NoSQL database that uses JSON for data
       storage. MongoDB(TM) Sharded improves scalability and reliability for large
       datasets by distributing data across multiple machines.
-    digest: 34caf9dea3d215766f2e6e393ee45dcd4a964e885659ecb1791cc232b9c37a90
+    digest: 702499303eb6fe704837c2c69262cc8d9239b530e66d84ca3c3d686d93143de3
     home: https://bitnami.com
     icon: https://dyltqmyl993wv.cloudfront.net/assets/stacks/mongodb/img/mongodb-stack-220x234.png
     keywords:
@@ -52,6 +52,6 @@ entries:
     - https://github.com/shepherd44/containers/tree/main/containers/mongodb-sharded
     - https://github.com/bitnami/charts/tree/main/bitnami/mongodb-sharded
     urls:
-    - https://shepherd44.github.io/helm-charts/docs/mongodb-sharded-9.4.16.tgz
-    version: 9.4.16
-generated: "2026-09-04T21:59:25.724599+09:00"
+    - https://shepherd44.github.io/helm-charts/docs/mongodb-sharded-9.4.17.tgz
+    version: 9.4.17
+generated: "2026-09-04T22:08:57.390579+09:00"

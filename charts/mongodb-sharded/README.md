@@ -12,20 +12,25 @@
 > | | upstream | here |
 > |---|---|---|
 > | `image` | `docker.io/bitnami/mongodb-sharded:8.0.13-debian-12-r0` | `docker.io/shepherd9664/mongodb-sharded:8.0.30-debian-12-latest` |
-> | `volumePermissions.image` | `docker.io/bitnami/os-shell` | `docker.io/bitnamilegacy/os-shell` (tag unchanged) |
-> | `metrics.image` | `docker.io/bitnami/mongodb-exporter` | `docker.io/bitnamilegacy/mongodb-exporter` (tag unchanged) |
+> | `volumePermissions.image` | `docker.io/bitnami/os-shell:12-debian-12-r51` | `docker.io/shepherd9664/os-shell:12-debian-12-latest` |
+> | `metrics.image` | `docker.io/bitnami/mongodb-exporter:0.47.0-debian-12-r1` | `docker.io/shepherd9664/mongodb-exporter:0.53.0-debian-12-latest` |
 > | `common` dependency | `oci://registry-1.docker.io/bitnamicharts` | `file://../common` (vendored in this repo) |
 > | `appVersion` | `8.0.13` | `8.0.30` |
-> | `version` | `9.4.15` | `9.4.16` (fork version line) |
+> | `version` | `9.4.15` | `9.4.17` (fork version line) |
 >
 > `Chart.yaml`'s `annotations.images` lists the substituted images, so the chart's own image
 > verification passes without `global.security.allowInsecureImages`.
 >
-> The `mongodb-sharded` image is built from
-> [shepherd44/containers](https://github.com/shepherd44/containers/tree/main/containers/mongodb-sharded):
-> Bitnami's scaffolding with the `mongod`/`mongos` binaries replaced by the official MongoDB
-> Debian 12 build. `os-shell` and `mongodb-exporter` have no replacement build yet and point at
-> `bitnamilegacy` at their last published tags.
+> All three images are built from
+> [shepherd44/containers](https://github.com/shepherd44/containers/tree/main/containers):
+>
+> - `mongodb-sharded` — Bitnami's scaffolding with `mongod`/`mongos` replaced by the official
+>   MongoDB Debian 12 build
+> - `os-shell` — minideb with the same shell tooling, minus the four bitnami helper binaries that
+>   have no upstream source (this chart's `volume-permissions` does not use them)
+> - `mongodb-exporter` — Percona's official release binary at the path this chart calls
+>
+> No `bitnamilegacy` images remain.
 >
 > Everything below is upstream documentation and still refers to Bitnami.
 
