@@ -42,48 +42,130 @@ Latest patch per line on Docker Hub, as of 2026-09-05: `7.5.16`, `7.6.13`, `7.7.
 Moving to 8.x is a real decision, not a tag bump: Kafka 4.x clients, Java 21 recommended,
 and 8.2.x or 8.3.x rather than 8.0.x since that line has already ended.
 
-## What actually changes between versions
+## Configuration fields
 
-Schema Registry's configuration surface only grows across these lines. Comparing
-`SchemaRegistryConfig.java` at each tag:
+Two sources define what Schema Registry accepts. Both matter here because the chart sets
+keys from each:
 
-**7.5.7 → 7.9.9** — 15 properties added, **none removed**:
+| Source | File | Covers |
+|---|---|---|
+| `confluentinc/schema-registry` | `SchemaRegistryConfig.java` | `kafkastore.*`, `leader.*`, `schema.*`, `mode.mutability`, … |
+| `confluentinc/rest-utils` | `RestConfig.java` | `listeners`, `ssl.*`, `authentication.*`, `debug`, … |
 
-```
-cert.name                          kafkastore.init.wait.for.reader
-cert.type                          size.limit.filter.enabled
-context.search.default.limit       size.limit.filter.max.request.body.size
-context.search.max.limit           subject.search.default.limit
-enable.fips                        subject.search.max.limit
-enable.store.health.check          subject.version.search.default.limit
-init.resource.extension.class      subject.version.search.max.limit
-```
+The lists below come from the `.define(...)` registrations in those files at each tag,
+which is the set the process actually accepts — not from release notes, which Confluent
+does not publish per version in a retrievable form.
 
-**7.9.9 → 8.3.1** — 5 properties added, **none removed**:
+### What this chart sets
 
-```
-associations.enable                schema.reject.empty.subject
-enable.fips.mode                   schema.validate.new.schemas
-metadata.encoder.secret.strict.validation
-```
+| Env the chart injects | Config key | Source |
+|---|---|---|
+| `SCHEMA_REGISTRY_HOST_NAME` | `host.name` | schema-registry |
+| `SCHEMA_REGISTRY_LISTENERS` | `listeners` | rest-utils |
+| `SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS` | `kafkastore.bootstrap.servers` | schema-registry |
+| `SCHEMA_REGISTRY_KAFKASTORE_GROUP_ID` | `kafkastore.group.id` | schema-registry |
+| `SCHEMA_REGISTRY_MASTER_ELIGIBILITY` | `master.eligibility` | schema-registry — **deprecated**, see below |
+| `SCHEMA_REGISTRY_HEAP_OPTS` | — | JVM, not a Schema Registry config |
+| `SCHEMA_REGISTRY_OPTS` | — | JVM |
+| `JMX_PORT` | — | JVM |
 
-So nothing this chart sets is at risk across the whole 7.5 → 8.3 range. Specifically, all
-of these still exist at 8.3.1:
+Anything in `schema_registry.configurationOverrides` becomes
+`SCHEMA_REGISTRY_<KEY_WITH_DOTS_AS_UNDERSCORES>`, uppercased. `customEnv` is passed
+through verbatim.
 
-| Key | 7.5.7 | 7.9.9 | 8.3.1 |
+### The fields worth knowing
+
+Of the 71 keys registered at 7.9, these are the ones that come up:
+
+**Kafka store — where schemas actually live**
+
+| Key | Default | Note |
+|---|---|---|
+| `kafkastore.bootstrap.servers` | — | required; the chart sets it |
+| `kafkastore.topic` | `_schemas` | the schema log. This is why pod replacement loses nothing |
+| `kafkastore.topic.replication.factor` | `3` | applies only when the topic is created |
+| `kafkastore.group.id` | — | leader election group; the chart defaults it to the release name |
+| `kafkastore.init.timeout.ms` | `60000` | startup gives up after this |
+| `kafkastore.security.protocol`, `kafkastore.sasl.*`, `kafkastore.ssl.*` | — | ~20 keys, mirroring the Kafka client |
+
+**Identity and leader election**
+
+| Key | Note |
+|---|---|
+| `leader.eligibility` | whether this instance may become the writer. The chart still sets the deprecated `master.eligibility` |
+| `host.name` | advertised address; the chart sets it from the pod IP |
+| `inter.instance.protocol` | `http`/`https` for forwarding writes to the leader |
+| `leader.election.sticky` | added 7.6 |
+
+**Schemas and compatibility**
+
+| Key | Default | Note |
+|---|---|---|
+| `schema.compatibility.level` | `backward` | global default; per-subject settings override it |
+| `mode.mutability` | `true` | whether the registry mode can be changed at runtime |
+| `schema.providers` | avro, json, protobuf | schema formats to load |
+| `schema.validate.fields` | `false` | added 7.6 |
+| `schema.cache.size`, `schema.cache.expiry.secs` | | |
+
+**HTTP layer** (rest-utils)
+
+| Key | Note |
+|---|---|
+| `listeners` | the chart sets `http://0.0.0.0:<servicePort>` |
+| `authentication.method`, `authentication.realm`, `authentication.roles` | there is no auth by default — relevant if you expose an Ingress |
+| `ssl.*` | server TLS |
+| `debug` | verbose error responses |
+
+**Paging limits** — the newest cluster of additions, and the reason the key count grew:
+`schema.search.*`, `subject.search.*` (7.9), `context.search.*`,
+`subject.version.search.*` (8.0), each with a `default.limit` and a `max.limit`.
+
+### Added by version
+
+Counts are registered keys, `SchemaRegistryConfig` / `RestConfig`.
+
+| Version | SR | rest-utils | Added |
 |---|---|---|---|
-| `kafkastore.bootstrap.servers` | yes | yes | yes |
-| `kafkastore.group.id` | yes | yes | yes |
-| `host.name` | yes | yes | yes |
-| `master.eligibility` | yes | yes | yes |
-| `leader.eligibility` | yes | yes | yes |
+| 7.5 | 63 | 79 | baseline |
+| 7.6 | 67 | 84 | SR: `enable.fips`, `init.resource.extension.class`, `leader.election.sticky`, `schema.validate.fields` · rest: `sni.check.enabled`, `network.traffic.rate.limit.*`, `metrics.global.stats.request.tags.enable` |
+| 7.7 | 68 | 84 | SR: `enable.store.health.check` |
+| 7.8 | 68 | 84 | none |
+| 7.9 | 71 | 86 | SR: `kafkastore.init.wait.for.reader`, `subject.search.default.limit`, `subject.search.max.limit` · rest: `access.control.expose.headers`, `hsts.header.enable` |
+| 8.0 | 75 | 91 | SR: `context.search.*`, `subject.version.search.*` · rest: `expected.sni.headers`, `prefix.sni.check.enabled`, `sni.host.check.enabled`, `percentile.max.latency.ms`, `network.forwarded.request.customizer.enable` |
+| 8.1 | 75 | 94 | rest only: `prefix.sni.prefix`, `ssl.spire.enabled`, `return.429.instead.of.500.for.jetty.response.errors` |
+| 8.2 | 78 | 99 | SR: `associations.enable`, `enable.fips.mode`, `schema.validate.new.schemas` · rest: `dos.filter.tenant.*`, `jetty.legacy.uri.compliance`, `disable.response.size.metrics.collection` |
+| 8.3 | 82 | 100 | SR: `metadata.encoder.secret.strict.validation`, `schema.reject.empty.subject`, `size.limit.filter.enabled`, `size.limit.filter.max.request.body.size` · rest: `proxy.protocol.accepted.ip.range` |
 
-`master.eligibility` is the deprecated spelling of `leader.eligibility`, and the chart
-still sets `SCHEMA_REGISTRY_MASTER_ELIGIBILITY`. Both remain accepted at 8.3.1, so this is
-not urgent, but new deployments should prefer the `leader` spelling.
+### Removed by version
 
-The JMX MBean the exporter config scrapes, `kafka.schema.registry:type=master-slave-role`,
-is also unchanged through 8.3.1 despite how it reads.
+**None.** Across 7.5.0 → 8.3.0, neither `SchemaRegistryConfig` nor `RestConfig` drops a
+single registered key — 63 → 82 and 79 → 100, additions only. Nothing this chart sets is
+at risk anywhere in that range, including across the 7.x → 8.x major boundary.
+
+That is the useful result for upgrade planning: on this axis a version bump cannot break
+an existing config. What 8.x does change is the Kafka client generation and the
+recommended JRE, not the configuration surface.
+
+### Deprecated, still accepted
+
+Marked `@Deprecated` in 8.3.0 source but still registered and still working:
+
+| Deprecated | Use instead |
+|---|---|
+| `master.eligibility` | `leader.eligibility` |
+| `avro.compatibility.level` | `schema.compatibility.level` |
+| `kafkastore.connection.url` | `kafkastore.bootstrap.servers` |
+| `schema.registry.resource.extension.class` | `resource.extension.class` |
+| `schema.registry.inter.instance.protocol` | `inter.instance.protocol` |
+| `ssl.client.auth` (rest-utils) | `ssl.client.authentication` |
+
+**The chart sets one of these.** `SCHEMA_REGISTRY_MASTER_ELIGIBILITY` is hardcoded in the
+deployment template. It still works at 8.3.1 — verified — so there is nothing urgent, but
+it should move to `leader.eligibility` before it stops being accepted, and new values
+files should not add more of these.
+
+`kafkastore.connection.url` is the ZooKeeper-era store address. Its continued presence is
+a compatibility shim, not an option worth using.
 
 ## Runtime
 
