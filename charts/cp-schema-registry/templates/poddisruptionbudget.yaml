@@ -1,0 +1,18 @@
+{{- if .Values.schema_registry.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ template "cp-schema-registry.fullname" . }}
+  labels:
+{{ include "cp-schema-registry.labels" . | indent 4 }}
+spec:
+  {{- if .Values.schema_registry.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.schema_registry.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if .Values.schema_registry.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.schema_registry.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+{{ include "cp-schema-registry.selectorLabels" . | indent 6 }}
+{{- end }}

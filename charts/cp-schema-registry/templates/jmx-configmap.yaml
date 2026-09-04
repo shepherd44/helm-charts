@@ -4,10 +4,7 @@ kind: ConfigMap
 metadata:
   name: {{ template "cp-schema-registry.fullname" . }}-jmx-configmap
   labels:
-    app: {{ template "cp-schema-registry.name" . }}
-    chart: {{ template "cp-schema-registry.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+{{ include "cp-schema-registry.labels" . | indent 4 }}
 data:
   jmx-schema-registry-prometheus.yml: |+
     jmxUrl: service:jmx:rmi:///jndi/rmi://localhost:{{ .Values.schema_registry.jmx.port }}/jmxrmi

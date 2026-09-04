@@ -3,10 +3,7 @@ kind: Service
 metadata:
   name: {{ template "cp-schema-registry.fullname" . }}
   labels:
-    app: {{ template "cp-schema-registry.name" . }}
-    chart: {{ template "cp-schema-registry.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+{{ include "cp-schema-registry.labels" . | indent 4 }}
 spec:
   ports:
     - name: schema-registry
@@ -16,5 +13,4 @@ spec:
       port: {{ .Values.schema_registry.prometheus.jmx.port }}
     {{- end }}
   selector:
-    app: {{ template "cp-schema-registry.name" . }}
-    release: {{ .Release.Name }}
+{{ include "cp-schema-registry.selectorLabels" . | indent 4 }}

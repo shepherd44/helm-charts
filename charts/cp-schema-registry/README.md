@@ -19,7 +19,7 @@ This chart bootstraps a deployment of a Confluent Schema Registry
 
 | | |
 |---|---|
-| Chart | `0.2.0` |
+| Chart | `0.3.0` |
 | Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
 
 Confluent supports each Community release for two years from its minor release date.
@@ -33,7 +33,7 @@ The JMX exporter sidecar is **off by default** — see [Metrics](#metrics).
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.2.0 \
+  --version 0.3.0 \
   --set schema_registry.kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
@@ -44,7 +44,7 @@ With a values file:
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.2.0 -f my-values.yaml
+  --version 0.3.0 -f my-values.yaml
 ```
 
 ```yaml
@@ -80,6 +80,38 @@ locally:
 kubectl port-forward svc/my-schema-registry-cp-schema-registry 8081:8081
 curl localhost:8081/subjects
 ```
+
+## Health, scheduling, security
+
+Probes are on by default. Liveness hits `/`, which only needs Jetty up; readiness hits
+`/subjects`, which needs the Kafka store readable — that is the difference that matters,
+since a Schema Registry that cannot reach Kafka should leave the Service, not restart.
+Both are plain values: override them, or set either to `null` to omit it.
+
+```yaml
+schema_registry:
+  readinessProbe:
+    initialDelaySeconds: 30
+  livenessProbe: null      # omit entirely
+```
+
+`schema_registry.containerSecurityContext` applies to the Schema Registry container:
+no privilege escalation, all capabilities dropped, `RuntimeDefault` seccomp.
+`readOnlyRootFilesystem` is deliberately absent — the Confluent image writes generated
+config and logs inside the container.
+
+`schema_registry.podDisruptionBudget` is off by default. At `replicaCount: 1` a budget
+of `minAvailable: 1` does not protect anything, it just blocks node drains. Enable it
+with two or more replicas.
+
+`schema_registry.heapOptions` is passed as `SCHEMA_REGISTRY_HEAP_OPTS` when set, and is
+empty by default so the JVM keeps its own container-aware sizing. Set it together with
+`resources.limits.memory`, not on its own.
+
+Object metadata carries both the legacy `app`/`release`/`chart`/`heritage` labels and the
+standard `app.kubernetes.io/*` set. The Deployment's `spec.selector` still uses only the
+legacy pair, on purpose: a selector is immutable, so changing it would break
+`helm upgrade` on every existing release.
 
 ## Metrics
 
@@ -135,7 +167,13 @@ helm install my-schema-registry shepherd44/cp-schema-registry \
 | `schema_registry.configurationOverrides` | Schema Registry [configuration](https://docs.confluent.io/current/schema-registry/docs/config.html) overrides | `{}` |
 | `schema_registry.customEnv` | Extra environment variables | `{}` |
 | `schema_registry.servicePort` | Service port | `8081` |
-| `schema_registry.heapOptions` | JVM heap options. **Not wired up** — the template has `SCHEMA_REGISTRY_HEAP_OPTS` commented out | `-Xms512M -Xmx512M` |
+| `schema_registry.heapOptions` | `SCHEMA_REGISTRY_HEAP_OPTS`; omitted when empty | `""` |
+| `schema_registry.livenessProbe` | Liveness probe, or `null` to omit | `httpGet /` |
+| `schema_registry.readinessProbe` | Readiness probe, or `null` to omit | `httpGet /subjects` |
+| `schema_registry.containerSecurityContext` | Security context for the Schema Registry container | drop ALL, no privilege escalation, RuntimeDefault |
+| `schema_registry.podDisruptionBudget.enabled` | Create a PodDisruptionBudget | `false` |
+| `schema_registry.podDisruptionBudget.minAvailable` | Minimum available pods | `1` |
+| `schema_registry.podDisruptionBudget.maxUnavailable` | Maximum unavailable pods | `""` |
 | `schema_registry.schemaRegistryOpts` | Extra `SCHEMA_REGISTRY_OPTS` | unset |
 | `schema_registry.resources` | Requests and limits | `{}` |
 | `schema_registry.podAnnotations` | Annotations on the pod | `{}` |

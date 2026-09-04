@@ -62,3 +62,32 @@ Default GroupId to Release Name but allow it to be overridden
 {{- .Release.Name -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Selector labels.
+
+These are deliberately the legacy `app`/`release` pair, not app.kubernetes.io/*.
+A Deployment's spec.selector is immutable, so changing these would make
+`helm upgrade` fail on every existing release with "field is immutable" and
+require deleting the Deployment first. The standard labels are added to metadata
+instead, where they can change freely.
+*/}}
+{{- define "cp-schema-registry.selectorLabels" -}}
+app: {{ template "cp-schema-registry.name" . }}
+release: {{ .Release.Name }}
+{{- end -}}
+
+{{/*
+Labels applied to object metadata: the legacy set plus the standard ones.
+*/}}
+{{- define "cp-schema-registry.labels" -}}
+{{ include "cp-schema-registry.selectorLabels" . }}
+chart: {{ template "cp-schema-registry.chart" . }}
+heritage: {{ .Release.Service }}
+app.kubernetes.io/name: {{ template "cp-schema-registry.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/part-of: {{ template "cp-schema-registry.name" . }}
+app.kubernetes.io/component: schema-registry
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end -}}
