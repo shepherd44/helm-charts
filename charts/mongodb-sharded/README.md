@@ -1,5 +1,34 @@
 <!--- app-name: MongoDB&reg; Sharded -->
 
+> ## Fork notice
+>
+> This chart is a fork of [`bitnami/mongodb-sharded`](https://github.com/bitnami/charts/tree/main/bitnami/mongodb-sharded)
+> (Apache-2.0, see `LICENSE.md`), taken verbatim at upstream commit `8f8032ba` (chart `9.4.15`).
+> Bitnami stopped publishing its public container catalog, so the images this chart used are no
+> longer updated.
+>
+> Changes made in this fork:
+>
+> | | upstream | here |
+> |---|---|---|
+> | `image` | `docker.io/bitnami/mongodb-sharded:8.0.13-debian-12-r0` | `docker.io/shepherd9664/mongodb-sharded:8.0.30-debian-12-latest` |
+> | `volumePermissions.image` | `docker.io/bitnami/os-shell` | `docker.io/bitnamilegacy/os-shell` (tag unchanged) |
+> | `metrics.image` | `docker.io/bitnami/mongodb-exporter` | `docker.io/bitnamilegacy/mongodb-exporter` (tag unchanged) |
+> | `common` dependency | `oci://registry-1.docker.io/bitnamicharts` | `file://../common` (vendored in this repo) |
+> | `appVersion` | `8.0.13` | `8.0.30` |
+> | `version` | `9.4.15` | `9.4.16` (fork version line) |
+>
+> `Chart.yaml`'s `annotations.images` lists the substituted images, so the chart's own image
+> verification passes without `global.security.allowInsecureImages`.
+>
+> The `mongodb-sharded` image is built from
+> [shepherd44/containers](https://github.com/shepherd44/containers/tree/main/containers/mongodb-sharded):
+> Bitnami's scaffolding with the `mongod`/`mongos` binaries replaced by the official MongoDB
+> Debian 12 build. `os-shell` and `mongodb-exporter` have no replacement build yet and point at
+> `bitnamilegacy` at their last published tags.
+>
+> Everything below is upstream documentation and still refers to Bitnami.
+
 # MongoDB&reg; Sharded packaged by Bitnami
 
 MongoDB&reg; is an open source NoSQL database that uses JSON for data storage. MongoDB&trade; Sharded improves scalability and reliability for large datasets by distributing data across multiple machines.
@@ -11,7 +40,8 @@ Disclaimer: The respective trademarks mentioned in the offering are owned by the
 ## TL;DR
 
 ```console
-helm install my-release oci://registry-1.docker.io/bitnamicharts/mongodb-sharded
+helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
+helm install my-release shepherd44/mongodb-sharded
 ```
 
 ## Why use Bitnami Secure Images?
@@ -105,7 +135,7 @@ Bitnami will release a new chart updating its containers if a new version of the
 
 ### Change MongoDB&reg; version
 
-To modify the MongoDB&reg; version used in this chart you can specify a [valid image tag](https://hub.docker.com/r/bitnami/mongodb-sharded/tags/) using the `image.tag` parameter. For example, `image.tag=X.Y.Z`. This approach is also applicable to other images like exporters.
+To modify the MongoDB&reg; version used in this chart you can specify a [valid image tag](https://hub.docker.com/r/shepherd9664/mongodb-sharded/tags/) using the `image.tag` parameter. For example, `image.tag=X.Y.Z`. This approach is also applicable to other images like exporters.
 
 ### Sharding
 
