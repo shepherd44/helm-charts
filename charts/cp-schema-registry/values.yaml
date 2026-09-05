@@ -154,6 +154,38 @@ ingress:
     #   hosts:
     #     - schema-registry.example.com
 
+## HTTPRoute, for clusters running a Gateway API controller. Independent of `ingress`
+## above rather than an either/or switch: during a migration people genuinely run both,
+## and independent flags mean retiring one later is not a breaking change.
+##
+## Needs the Gateway API CRDs installed (v1 needs Kubernetes >= 1.25) and a controller
+## that implements them. The chart renders the object anywhere — nothing is auto-detected,
+## because rendering must not depend on which cluster the client happens to point at.
+##
+## `parentRefs` is required: an HTTPRoute with no parent attaches to no Gateway and
+## silently routes nothing, so the chart fails instead.
+httpRoute:
+  enabled: false
+  name: ""
+  labels: {}
+  annotations: {}
+  parentRefs: []
+    # - name: my-gateway
+    #   namespace: gateway-system
+    #   sectionName: https
+  hostnames: []
+    # - schema-registry.example.com
+  ## Left empty, the chart routes every path to its own Service. Set this to take
+  ## over completely — matches, filters, timeouts, weighted backends.
+  rules: []
+    # - matches:
+    #     - path:
+    #         type: PathPrefix
+    #         value: /subjects
+    #   backendRefs:
+    #     - name: my-release-cp-schema-registry
+    #       port: 8081
+
 ## Node labels for pod assignment
 ## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
 nodeSelector: {}

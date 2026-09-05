@@ -264,6 +264,60 @@
         }
       }
     },
+    "httpRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "labels": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "annotations": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "parentRefs": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ]
+          }
+        },
+        "hostnames": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "rules": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
     "nodeSelector": {
       "type": [
         "object",
