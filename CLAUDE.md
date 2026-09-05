@@ -17,32 +17,40 @@ committed on purpose — do not gitignore it, and do not hand-edit `index.yaml`.
 
 ## Work in a worktree
 
-**Never edit the primary checkout.** Every change — code, chart, docs — starts with a
-git worktree off `origin/main`:
+**Every change — code, chart, docs — happens in a worktree, never in the primary
+checkout.** Use the `EnterWorktree` tool rather than raw worktree commands. That tool
+fires only when a worktree is asked for by the user or named in project instructions,
+which is what this section is for.
 
-```shell
-BR=<type>/<short-name>            # feat, fix, chore, docs
-git fetch -q origin
-git worktree add -b "$BR" "/Users/james/workspace/helm-charts-wt/$BR" origin/main
-cd "/Users/james/workspace/helm-charts-wt/$BR"
+```
+EnterWorktree(name: "<type>/<short-name>")     # feat, fix, chore, docs
 ```
 
-`<repo>-wt/<branch>/` is the layout the other repos on this machine already use, so the
-path mirrors the branch name and several can exist at once.
+It creates `.claude/worktrees/<name>` on a new branch and moves the session into it. The
+base is `origin/<default-branch>` rather than local HEAD, under the default
+`worktree.baseRef: fresh` — so the primary checkout sitting on some other branch cannot
+leak in. Do not set that to `head` for this repo.
 
-Branch off `origin/main`, not the local branch: the primary checkout is often parked on
-something unrelated, and `git worktree add` inherits whatever HEAD it is given.
+Leaving:
 
-After the branch is merged, remove the worktree — a stale one is a second checkout that
-silently goes out of date:
-
-```shell
-git worktree remove /Users/james/workspace/helm-charts-wt/$BR
-git branch -d $BR
+```
+ExitWorktree(action: "keep")      # come back to it later
+ExitWorktree(action: "remove")    # work is merged or abandoned
 ```
 
-Package and index inside the worktree, so `docs/` and the chart change land in the same
-commit. Publishing still only happens when that commit reaches `main`.
+`remove` refuses while uncommitted files or unmerged commits remain, which is the
+behaviour to want — ask the user before passing `discard_changes`. Staying in the
+worktree until the session ends is fine too; the user is prompted then.
+
+`.claude/worktrees/` is ignored, so a worktree never appears as untracked files in its
+own status output.
+
+A worktree-isolated session is fenced: commands that cannot be shown to stay inside the
+worktree are refused. Keep shell one-liners simple and run them from the worktree
+directory rather than wrapping them in heredocs that mention paths outside it.
+
+Package and index inside the worktree, so `docs/` and the chart change land in one
+commit. Publishing still only happens once that commit reaches `main`.
 
 ## Rules
 

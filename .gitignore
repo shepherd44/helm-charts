@@ -8,3 +8,6 @@
 
 ### OMC runtime state
 .omc/
+
+### Claude Code worktrees (EnterWorktree)
+.claude/worktrees/
