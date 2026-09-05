@@ -47,9 +47,18 @@ installed without adding a repo at all:
 helm install my-release oci://ghcr.io/shepherd44/charts/cp-schema-registry --version 1.2.0
 ```
 
-Same chart, same bytes — a second distribution channel, not a fork of the line. Registry
-artifacts are content-addressed, so a published digest cannot be repackaged, and each one
-is signed with keyless cosign:
+Same chart, same bytes: the workflow pushes the very `.tgz` that is committed in `docs/`
+rather than building the chart again, because `helm package` embeds a timestamp and would
+otherwise produce a different sha256 for identical content. So the two channels can be
+compared, not just claimed to match:
+
+```shell
+sha256sum cp-schema-registry-1.2.0.tgz        # pulled from the Pages repo
+crane manifest ghcr.io/shepherd44/charts/cp-schema-registry:1.2.0 | jq -r '.layers[0].digest'
+```
+
+Registry artifacts are content-addressed, so a published digest cannot be repackaged, and
+each one is signed with keyless cosign:
 
 ```shell
 cosign verify ghcr.io/shepherd44/charts/cp-schema-registry:1.2.0 \
