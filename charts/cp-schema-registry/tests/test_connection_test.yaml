@@ -26,7 +26,7 @@ tests:
 
   - it: can be turned off for air-gapped installs
     set:
-      schema_registry.tests.enabled: false
+      tests.enabled: false
     asserts:
       - hasDocuments:
           count: 0

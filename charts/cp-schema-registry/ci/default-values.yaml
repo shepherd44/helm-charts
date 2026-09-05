@@ -1,8 +1,7 @@
 # ct install: defaults, pointed at the KRaft Kafka the CI workflow deploys.
-schema_registry:
-  kafka:
-    bootstrapServers: PLAINTEXT://kafka.kafka.svc.cluster.local:9092
-  resources:
-    requests:
-      cpu: 100m
-      memory: 512Mi
+kafka:
+  bootstrapServers: PLAINTEXT://kafka.kafka.svc.cluster.local:9092
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi

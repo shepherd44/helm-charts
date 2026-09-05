@@ -1,0 +1,96 @@
+suite: deprecated schema_registry block
+templates:
+  - deployment.yaml
+  - service.yaml
+release:
+  name: t
+tests:
+  - it: maps the renamed keys onto the new ones
+    templates:
+      - deployment.yaml
+    set:
+      schema_registry:
+        imageTag: "8.0.0"
+        servicePort: 9081
+        securityContext:
+          runAsUser: 2000
+        prometheus:
+          jmx:
+            enabled: true
+            image: my/exporter
+            imageTag: "9.9.9"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: confluentinc/cp-schema-registry:8.0.0
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].containerPort
+          value: 9081
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 2000
+      - equal:
+          path: spec.template.spec.containers[1].image
+          value: my/exporter:9.9.9
+
+  - it: keeps the defaults the legacy block does not mention
+    templates:
+      - deployment.yaml
+    set:
+      schema_registry:
+        replicaCount: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: confluentinc/cp-schema-registry:7.9.9
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false
+
+  - it: wins key by key, letting the new shape fill in the rest
+    templates:
+      - deployment.yaml
+    set:
+      image.tag: "9.9.9"
+      schema_registry:
+        replicaCount: 2
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 2
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: confluentinc/cp-schema-registry:9.9.9
+
+  - it: wins over the new shape when both set the same thing
+    templates:
+      - deployment.yaml
+    set:
+      image.tag: "9.9.9"
+      schema_registry:
+        imageTag: "8.0.0"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: confluentinc/cp-schema-registry:8.0.0
+
+  - it: still reaches the Service through the old servicePort
+    templates:
+      - service.yaml
+    set:
+      schema_registry:
+        servicePort: 9081
+        prometheus:
+          jmx:
+            enabled: true
+            port: 15556
+    asserts:
+      - equal:
+          path: spec.ports[0].port
+          value: 9081
+      - equal:
+          path: spec.ports[1].port
+          value: 15556

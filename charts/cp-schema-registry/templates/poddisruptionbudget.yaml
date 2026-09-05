@@ -1,4 +1,5 @@
-{{- if .Values.schema_registry.podDisruptionBudget.enabled }}
+{{- $v := include "cp-schema-registry.values" . | fromYaml -}}
+{{- if $v.podDisruptionBudget.enabled }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -6,11 +7,11 @@ metadata:
   labels:
 {{ include "cp-schema-registry.labels" . | indent 4 }}
 spec:
-  {{- if .Values.schema_registry.podDisruptionBudget.minAvailable }}
-  minAvailable: {{ .Values.schema_registry.podDisruptionBudget.minAvailable }}
+  {{- if $v.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ $v.podDisruptionBudget.minAvailable }}
   {{- end }}
-  {{- if .Values.schema_registry.podDisruptionBudget.maxUnavailable }}
-  maxUnavailable: {{ .Values.schema_registry.podDisruptionBudget.maxUnavailable }}
+  {{- if $v.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ $v.podDisruptionBudget.maxUnavailable }}
   {{- end }}
   selector:
     matchLabels:

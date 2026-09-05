@@ -1,16 +1,14 @@
 # ct install: JMX exporter sidecar on. The second JVM in the pod is the part
 # that only gets exercised when something turns it on.
-schema_registry:
-  kafka:
-    bootstrapServers: PLAINTEXT://kafka.kafka.svc.cluster.local:9092
+kafka:
+  bootstrapServers: PLAINTEXT://kafka.kafka.svc.cluster.local:9092
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+metrics:
+  enabled: true
   resources:
     requests:
-      cpu: 100m
-      memory: 512Mi
-  prometheus:
-    jmx:
-      enabled: true
-      resources:
-        requests:
-          cpu: 50m
-          memory: 128Mi
+      cpu: 50m
+      memory: 128Mi

@@ -29,7 +29,7 @@ carries its `LICENSE` verbatim, recovered from a surviving fork. Local changes a
 
 | | |
 |---|---|
-| Chart | `0.7.0` |
+| Chart | `1.0.0` |
 | Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
 
 Confluent supports each Community release for two years from its minor release date.
@@ -41,37 +41,65 @@ Confluent supports each Community release for two years from its minor release d
 
 The JMX exporter sidecar is **off by default** — see [Metrics](#metrics).
 
+## Upgrading to 1.0.0
+
+1.0.0 flattened the values. The rendered manifests did not change: 0.7.0 and 1.0.0 produce
+byte-identical output for the same configuration.
+
+A 0.7.0 values file keeps working as-is. Everything under `schema_registry` is mapped onto
+the new keys, and the chart prints a warning at install time while any of it is in use.
+The mapping wins key by key — what the old block sets overrides the same setting in the
+new shape, what it leaves out falls through — so a file can be migrated a piece at a time.
+
+Most keys just move up a level: `schema_registry.replicaCount` becomes `replicaCount`,
+`schema_registry.resources` becomes `resources`, and so on. Eight changed shape as well:
+
+| 0.7.0 | 1.0.0 |
+|---|---|
+| `schema_registry.image` (a string) | `image.repository` |
+| `schema_registry.imageTag` | `image.tag` |
+| `schema_registry.imagePullPolicy` | `image.pullPolicy` |
+| `schema_registry.imagePullSecrets` | `image.pullSecrets` |
+| `schema_registry.servicePort` | `service.port` |
+| `schema_registry.securityContext` | `podSecurityContext` |
+| `schema_registry.prometheus.jmx.*` | `metrics.*`, with `image`/`imageTag`/`imagePullPolicy` becoming `metrics.image.repository`/`.tag`/`.pullPolicy` |
+| `schema_registry.tests.image` (a string) | `tests.image.repository`, likewise for the tag and pull policy |
+
+Why bother: `--set` on a key a chart does not have is accepted silently, so
+`--set image.tag=8.0.0` used to install the defaults and exit zero — it looked like it
+worked. The nesting was also a standing argument about which convention each new key
+should follow, and the list is about to grow.
+
 ## Install
 
 ```console
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.7.0 \
-  --set schema_registry.kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
+  --version 1.0.0 \
+  --set kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
-`schema_registry.kafka.bootstrapServers` is the one value with no usable default. Point
+`kafka.bootstrapServers` is the one value with no usable default. Point
 it at an existing Kafka; this chart does not bring one.
 
 With a values file:
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.7.0 -f my-values.yaml
+  --version 1.0.0 -f my-values.yaml
 ```
 
 ```yaml
 # my-values.yaml
-schema_registry:
-  replicaCount: 2
-  kafka:
-    bootstrapServers: "PLAINTEXT://my-kafka-headless:9092"
-  configurationOverrides:
-    kafkastore.topic: _schemas
-  resources:
-    requests: { cpu: 200m, memory: 768Mi }
-    limits:   { cpu: 500m, memory: 1Gi }
+replicaCount: 2
+kafka:
+  bootstrapServers: "PLAINTEXT://my-kafka-headless:9092"
+configurationOverrides:
+  kafkastore.topic: _schemas
+resources:
+  requests: { cpu: 200m, memory: 768Mi }
+  limits:   { cpu: 500m, memory: 1Gi }
 ```
 
 ```console
@@ -97,25 +125,24 @@ curl localhost:8081/subjects
 
 ## Configuration
 
-`schema_registry.configurationOverrides` becomes `SCHEMA_REGISTRY_*` environment, and
+`configurationOverrides` becomes `SCHEMA_REGISTRY_*` environment, and
 **takes precedence over the keys the chart sets itself** — `listeners`,
 `kafkastore.bootstrap.servers`, `kafkastore.group.id`, `leader.eligibility`, `host.name`.
 Before 0.5.0 overriding one of those emitted the variable twice; last-wins made it
 mostly work, but it was not something to rely on.
 
 ```yaml
-schema_registry:
-  configurationOverrides:
-    kafkastore.topic: _schemas
-    schema.compatibility.level: full
-    kafkastore.topic.replication.factor: "3"
+configurationOverrides:
+  kafkastore.topic: _schemas
+  schema.compatibility.level: full
+  kafkastore.topic.replication.factor: "3"
 ```
 
 `host.name` defaults to the pod IP via fieldRef. Setting it in
 `configurationOverrides` replaces that entirely, which is what you want when instances
 must advertise a routable name rather than a pod IP.
 
-`schema_registry.leaderEligibility` controls `leader.eligibility` — whether an instance
+`leaderEligibility` controls `leader.eligibility` — whether an instance
 may be elected the writer. Set it false only when another release is eligible; with no
 eligible instance anywhere, schema registration fails.
 
@@ -143,15 +170,14 @@ inventory: what exists, what appeared in which version, and what the chart sets.
 Off by default. The REST API is served on `servicePort` (8081).
 
 ```yaml
-schema_registry:
-  ingress:
-    enabled: true
-    className: nginx
-    hosts:
-      - host: schema-registry.example.com
-        paths:
-          - path: /
-            pathType: Prefix
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: schema-registry.example.com
+      paths:
+        - path: /
+          pathType: Prefix
 ```
 
 `name` overrides the Ingress name, which is what you need to adopt an Ingress that
@@ -177,10 +203,9 @@ since a Schema Registry that cannot reach Kafka should leave the Service, not re
 Both are plain values: override them, or set either to `null` to omit it.
 
 ```yaml
-schema_registry:
-  readinessProbe:
-    initialDelaySeconds: 30
-  livenessProbe: null      # omit entirely
+readinessProbe:
+  initialDelaySeconds: 30
+livenessProbe: null      # omit entirely
 ```
 
 The pods run as their own ServiceAccount, created by the chart, with
@@ -190,25 +215,24 @@ credential nothing used. The ServiceAccount is also the only place cloud identit
 attached without affecting every other workload in the namespace:
 
 ```yaml
-schema_registry:
-  serviceAccount:
-    annotations:
-      eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/schema-registry
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/schema-registry
 ```
 
 Set `create: false` with an empty `name` to go back to the namespace default, or
 `create: false` with a `name` to use a ServiceAccount managed elsewhere.
 
-`schema_registry.containerSecurityContext` applies to the Schema Registry container:
+`containerSecurityContext` applies to the Schema Registry container:
 no privilege escalation, all capabilities dropped, `RuntimeDefault` seccomp.
 `readOnlyRootFilesystem` is deliberately absent — the Confluent image writes generated
 config and logs inside the container.
 
-`schema_registry.podDisruptionBudget` is off by default. At `replicaCount: 1` a budget
+`podDisruptionBudget` is off by default. At `replicaCount: 1` a budget
 of `minAvailable: 1` does not protect anything, it just blocks node drains. Enable it
 with two or more replicas.
 
-`schema_registry.resources` is empty by default, and that is worth understanding before
+`resources` is empty by default, and that is worth understanding before
 leaving it that way. With no `limits.memory`, the container's cgroup reports no limit, so
 the JVM sizes its heap from the **node**, not the container. Measured on a 257Gi node:
 
@@ -222,7 +246,7 @@ actual usage               =  288Mi
 Nothing stops that heap from growing into the node. Setting `limits.memory` is what makes
 the JVM container-aware; with a 1Gi limit the same JVM reports a 256Mi max heap.
 
-`schema_registry.heapOptions` is passed as `SCHEMA_REGISTRY_HEAP_OPTS` when set and is
+`heapOptions` is passed as `SCHEMA_REGISTRY_HEAP_OPTS` when set and is
 empty by default. Set it together with `limits.memory` rather than on its own — an `-Xmx`
 above the limit gets the pod OOMKilled instead of throwing `OutOfMemoryError`.
 
@@ -264,28 +288,26 @@ secrets out of it and use `envFrom` instead — the keys must already be spelled
 Schema Registry expects:
 
 ```yaml
-schema_registry:
-  envFrom:
-    - secretRef:
-        name: schema-registry-kafka-credentials   # SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG, ...
+envFrom:
+  - secretRef:
+      name: schema-registry-kafka-credentials   # SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG, ...
 ```
 
 A JKS truststore or keystore is mounted the same way. The server container mounts
 nothing by default:
 
 ```yaml
-schema_registry:
-  extraVolumes:
-    - name: kafka-truststore
-      secret:
-        secretName: kafka-truststore
-  extraVolumeMounts:
-    - name: kafka-truststore
-      mountPath: /etc/schema-registry/secrets
-      readOnly: true
-  configurationOverrides:
-    kafkastore.ssl.truststore.location: /etc/schema-registry/secrets/truststore.jks
-    # the password comes from envFrom, not from here
+extraVolumes:
+  - name: kafka-truststore
+    secret:
+      secretName: kafka-truststore
+extraVolumeMounts:
+  - name: kafka-truststore
+    mountPath: /etc/schema-registry/secrets
+    readOnly: true
+configurationOverrides:
+  kafkastore.ssl.truststore.location: /etc/schema-registry/secrets/truststore.jks
+  # the password comes from envFrom, not from here
 ```
 
 ## Verify a release
@@ -303,15 +325,15 @@ its backing topic is not, which is the failure worth catching. It proves three t
 resolves, and the Kafka store is reachable.
 
 The hook runs only on `helm test`, never on install or upgrade. Set
-`schema_registry.tests.enabled=false` to leave it out of the release entirely, or point
-`schema_registry.tests.image` at a mirror if `curlimages/curl` is not pullable.
+`tests.enabled=false` to leave it out of the release entirely, or point
+`tests.image.repository` at a mirror if `curlimages/curl` is not pullable.
 
 CI runs it automatically: `ct install` installs each `ci/*-values.yaml` on a KinD cluster
 and then runs `helm test` against it.
 
 ## Metrics
 
-`schema_registry.prometheus.jmx.enabled` runs a JMX exporter sidecar on port 5556. It is
+`metrics.enabled` runs a JMX exporter sidecar on port 5556. It is
 **off by default**, for two reasons:
 
 - it is a second JVM in every pod (~77Mi in the deployments this chart came from), and
@@ -322,7 +344,7 @@ and then runs `helm test` against it.
 Turn it on only once something is configured to scrape port 5556:
 
 ```console
---set schema_registry.prometheus.jmx.enabled=true
+--set metrics.enabled=true
 ```
 
 The sidecar image is `shepherd9664/jmx-exporter`, built from
@@ -346,7 +368,7 @@ limit on the sidecar, nothing else capped it either. The current image is JRE 21
 reads cgroup v2 without help, and the flags are gone.
 
 Its entrypoint is the jar, so the deployment passes only `args` (port, config file).
-Pointing `schema_registry.prometheus.jmx.image` at a different image means matching that
+Pointing `metrics.image.repository` at a different image means matching that
 contract; an image expecting `java -jar ...` to be spelled out in `command` will not
 start.
 
@@ -356,83 +378,85 @@ through Confluent Platform 8.3, despite how it reads.
 
 ## Configuration
 
-Every parameter lives under the `schema_registry` key — this chart nests them, unlike the
-upstream confluent chart these docs came from.
+Parameters are top-level. Before 1.0.0 they all sat under a `schema_registry` key; that
+block still works and is still mapped, but it is deprecated — see
+[Upgrading to 1.0.0](#upgrading-to-100).
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --set schema_registry.replicaCount=2
+  --set replicaCount=2
 ```
 
 > A default [values.yaml](values.yaml) is provided.
 
 | Parameter | Description | Default |
 | --------- | ----------- | ------- |
-| `schema_registry.replicaCount` | Number of Schema Registry servers | `1` |
-| `schema_registry.image` | Image repository | `confluentinc/cp-schema-registry` |
-| `schema_registry.imageTag` | Image tag | `7.9.9` |
-| `schema_registry.imagePullPolicy` | Image pull policy | `IfNotPresent` |
-| `schema_registry.imagePullSecrets` | Secrets for private registries | unset |
-| `schema_registry.kafka.bootstrapServers` | Kafka bootstrap servers. **Required** | `""` |
-| `schema_registry.configurationOverrides` | Schema Registry configuration; wins over chart-set keys | `{}` |
-| `schema_registry.leaderEligibility` | `leader.eligibility` — may this instance become the writer | `true` |
-| `schema_registry.customEnv` | Extra environment variables | `{}` |
-| `schema_registry.servicePort` | Service port | `8081` |
-| `schema_registry.heapOptions` | `SCHEMA_REGISTRY_HEAP_OPTS`; omitted when empty | `""` |
-| `schema_registry.livenessProbe` | Liveness probe, or `null` to omit | `httpGet /` |
-| `schema_registry.readinessProbe` | Readiness probe, or `null` to omit | `httpGet /subjects` |
-| `schema_registry.containerSecurityContext` | Security context for the Schema Registry container | drop ALL, no privilege escalation, RuntimeDefault |
-| `schema_registry.podDisruptionBudget.enabled` | Create a PodDisruptionBudget | `false` |
-| `schema_registry.podDisruptionBudget.minAvailable` | Minimum available pods | `1` |
-| `schema_registry.podDisruptionBudget.maxUnavailable` | Maximum unavailable pods | `""` |
-| `schema_registry.ingress.enabled` | Create an Ingress | `false` |
-| `schema_registry.ingress.name` | Ingress name; defaults to the chart fullname | `""` |
-| `schema_registry.ingress.className` | `spec.ingressClassName` | `""` |
-| `schema_registry.ingress.labels` | Extra labels on the Ingress | `{}` |
-| `schema_registry.ingress.annotations` | Ingress annotations | `{}` |
-| `schema_registry.ingress.hosts` | Hosts and paths | `[]` |
-| `schema_registry.ingress.tls` | TLS blocks | `[]` |
-| `schema_registry.schemaRegistryOpts` | Extra `SCHEMA_REGISTRY_OPTS` | unset |
-| `schema_registry.resources` | Requests and limits | `{}` |
-| `schema_registry.podAnnotations` | Annotations on the pod | `{}` |
-| `schema_registry.nodeSelector` | Node selector | `{}` |
-| `schema_registry.tolerations` | Tolerations | `[]` |
-| `schema_registry.affinity` | Affinity | `{}` |
-| `schema_registry.securityContext.runAsUser` | Container UID | `1000` |
-| `schema_registry.securityContext.runAsGroup` | Container GID | `1000` |
-| `schema_registry.securityContext.fsGroup` | Supplementary GID | `1000` |
-| `schema_registry.securityContext.runAsNonRoot` | Refuse to run as root | `true` |
-| `schema_registry.jmx.port` | JMX port | `5555` |
-| `schema_registry.serviceAccount.create` | Create a ServiceAccount for the pods | `true` |
-| `schema_registry.serviceAccount.name` | Name of the ServiceAccount | fullname when created, `default` otherwise |
-| `schema_registry.serviceAccount.annotations` | ServiceAccount annotations (IRSA, Workload Identity) | `{}` |
-| `schema_registry.serviceAccount.labels` | ServiceAccount labels | `{}` |
-| `schema_registry.serviceAccount.automountServiceAccountToken` | Mount the API token into the pods | `false` |
-| `schema_registry.envFrom` | Env from existing Secrets/ConfigMaps — use this for credentials | `[]` |
-| `schema_registry.extraVolumes` | Extra pod volumes | `[]` |
-| `schema_registry.extraVolumeMounts` | Extra mounts on the server container | `[]` |
-| `schema_registry.initContainers` | Extra init containers | `[]` |
-| `schema_registry.extraContainers` | Extra sidecar containers | `[]` |
-| `schema_registry.priorityClassName` | Pod priority class | `""` |
-| `schema_registry.terminationGracePeriodSeconds` | Shutdown grace period | unset (Kubernetes default 30s) |
-| `schema_registry.tests.enabled` | Render the `helm test` hook | `true` |
-| `schema_registry.tests.image` | Test hook image (needs curl) | `curlimages/curl` |
-| `schema_registry.tests.imageTag` | Test hook image tag | `8.11.1` |
-| `schema_registry.tests.imagePullPolicy` | Test hook pull policy | `IfNotPresent` |
-| `schema_registry.tests.imagePullSecrets` | Test hook pull secrets | `[]` |
-| `schema_registry.tests.resources` | Test hook requests and limits | `{}` |
-| `schema_registry.tests.securityContext` | Test hook security context | numeric UID/GID `100`, non-root |
-| `schema_registry.prometheus.jmx.enabled` | Run the JMX exporter as a sidecar | `false` |
-| `schema_registry.prometheus.jmx.image` | Exporter image | `shepherd9664/jmx-exporter` |
-| `schema_registry.prometheus.jmx.imageTag` | Exporter image tag | `1.6.0-latest` |
-| `schema_registry.prometheus.jmx.imagePullPolicy` | Exporter pull policy | `IfNotPresent` |
-| `schema_registry.prometheus.jmx.port` | Exporter port | `5556` |
-| `schema_registry.prometheus.jmx.resources` | Exporter requests and limits | `{}` |
-| `schema_registry.prometheus.jmx.securityContext` | Exporter security context | UID/GID `10001`, non-root |
+| `replicaCount` | Number of Schema Registry servers | `1` |
+| `image.repository` | Image repository | `confluentinc/cp-schema-registry` |
+| `image.tag` | Image tag | `7.9.9` |
+| `image.pullPolicy` | Image pull policy | `IfNotPresent` |
+| `image.pullSecrets` | Secrets for private registries | unset |
+| `kafka.bootstrapServers` | Kafka bootstrap servers. **Required** | `""` |
+| `configurationOverrides` | Schema Registry configuration; wins over chart-set keys | `{}` |
+| `leaderEligibility` | `leader.eligibility` — may this instance become the writer | `true` |
+| `customEnv` | Extra environment variables | `{}` |
+| `service.port` | Service port | `8081` |
+| `heapOptions` | `SCHEMA_REGISTRY_HEAP_OPTS`; omitted when empty | `""` |
+| `livenessProbe` | Liveness probe, or `null` to omit | `httpGet /` |
+| `readinessProbe` | Readiness probe, or `null` to omit | `httpGet /subjects` |
+| `containerSecurityContext` | Security context for the Schema Registry container | drop ALL, no privilege escalation, RuntimeDefault |
+| `podDisruptionBudget.enabled` | Create a PodDisruptionBudget | `false` |
+| `podDisruptionBudget.minAvailable` | Minimum available pods | `1` |
+| `podDisruptionBudget.maxUnavailable` | Maximum unavailable pods | `""` |
+| `ingress.enabled` | Create an Ingress | `false` |
+| `ingress.name` | Ingress name; defaults to the chart fullname | `""` |
+| `ingress.className` | `spec.ingressClassName` | `""` |
+| `ingress.labels` | Extra labels on the Ingress | `{}` |
+| `ingress.annotations` | Ingress annotations | `{}` |
+| `ingress.hosts` | Hosts and paths | `[]` |
+| `ingress.tls` | TLS blocks | `[]` |
+| `schemaRegistryOpts` | Extra `SCHEMA_REGISTRY_OPTS` | unset |
+| `resources` | Requests and limits | `{}` |
+| `podAnnotations` | Annotations on the pod | `{}` |
+| `nodeSelector` | Node selector | `{}` |
+| `tolerations` | Tolerations | `[]` |
+| `affinity` | Affinity | `{}` |
+| `podSecurityContext.runAsUser` | Container UID | `1000` |
+| `podSecurityContext.runAsGroup` | Container GID | `1000` |
+| `podSecurityContext.fsGroup` | Supplementary GID | `1000` |
+| `podSecurityContext.runAsNonRoot` | Refuse to run as root | `true` |
+| `jmx.port` | JMX port | `5555` |
+| `serviceAccount.create` | Create a ServiceAccount for the pods | `true` |
+| `serviceAccount.name` | Name of the ServiceAccount | fullname when created, `default` otherwise |
+| `serviceAccount.annotations` | ServiceAccount annotations (IRSA, Workload Identity) | `{}` |
+| `serviceAccount.labels` | ServiceAccount labels | `{}` |
+| `serviceAccount.automountServiceAccountToken` | Mount the API token into the pods | `false` |
+| `envFrom` | Env from existing Secrets/ConfigMaps — use this for credentials | `[]` |
+| `extraVolumes` | Extra pod volumes | `[]` |
+| `extraVolumeMounts` | Extra mounts on the server container | `[]` |
+| `initContainers` | Extra init containers | `[]` |
+| `extraContainers` | Extra sidecar containers | `[]` |
+| `priorityClassName` | Pod priority class | `""` |
+| `terminationGracePeriodSeconds` | Shutdown grace period | unset (Kubernetes default 30s) |
+| `tests.enabled` | Render the `helm test` hook | `true` |
+| `tests.image.repository` | Test hook image (needs curl) | `curlimages/curl` |
+| `tests.image.tag` | Test hook image tag | `8.11.1` |
+| `tests.image.pullPolicy` | Test hook pull policy | `IfNotPresent` |
+| `tests.image.pullSecrets` | Test hook pull secrets | `[]` |
+| `tests.resources` | Test hook requests and limits | `{}` |
+| `tests.securityContext` | Test hook security context | numeric UID/GID `100`, non-root |
+| `metrics.enabled` | Run the JMX exporter as a sidecar | `false` |
+| `metrics.image.repository` | Exporter image | `shepherd9664/jmx-exporter` |
+| `metrics.image.tag` | Exporter image tag | `1.6.0-latest` |
+| `metrics.image.pullPolicy` | Exporter pull policy | `IfNotPresent` |
+| `metrics.port` | Exporter port | `5556` |
+| `metrics.resources` | Exporter requests and limits | `{}` |
+| `metrics.securityContext` | Exporter security context | UID/GID `10001`, non-root |
 | `nameOverride` | Override the chart name | unset |
 | `fullnameOverride` | Override the full release name | unset |
 | `overrideGroupId` | Override the Schema Registry group id | unset |
+| `schema_registry` | Deprecated pre-1.0.0 layout, mapped onto the keys above | `{}` |
 
-`schema_registry.metrics.enabled` used to sit in `values.yaml` doing nothing — no
+`metrics.enabled` used to sit in `values.yaml` doing nothing — no
 template read it. Removed in 0.2.0; the sidecar is controlled by
-`schema_registry.prometheus.jmx.enabled`.
+`metrics.enabled`.

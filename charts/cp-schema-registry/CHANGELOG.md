@@ -9,6 +9,41 @@ no upstream changelog to keep alongside this one.
 
 Each release is tagged in git as `cp-schema-registry-<version>`.
 
+## 1.0.0
+
+Breaking, in the values only: the rendered manifests are unchanged. Every values file
+that worked against 0.7.0 still works, because the old `schema_registry` block is mapped
+onto the new keys — but it is deprecated and the chart says so at install time.
+
+Everything moves up one level. `schema_registry.replicaCount` is `replicaCount`,
+`schema_registry.resources` is `resources`, and so on for the whole file. Five things
+changed shape as well as depth:
+
+| 0.7.0 | 1.0.0 |
+|---|---|
+| `schema_registry.image` (a string) | `image.repository` |
+| `schema_registry.imageTag` | `image.tag` |
+| `schema_registry.imagePullPolicy` | `image.pullPolicy` |
+| `schema_registry.imagePullSecrets` | `image.pullSecrets` |
+| `schema_registry.servicePort` | `service.port` |
+| `schema_registry.securityContext` | `podSecurityContext` |
+| `schema_registry.prometheus.jmx` | `metrics` |
+| `schema_registry.tests.image` (a string) | `tests.image.repository` |
+
+The old layout was the reason `--set image.tag=8.0.0` silently installed the defaults:
+`--set` on a key a chart does not have is accepted without complaint. It was also a
+standing argument about which convention a new key should follow, and the list of keys
+was about to grow — ServiceMonitor alone adds a dozen.
+
+The deprecated block wins key by key: what it sets overrides the same setting in the new
+shape, what it leaves out falls through. So a values file can be migrated a piece at a
+time, and `NOTES.txt` warns while any of it is still in use.
+
+Verified by rendering: 0.7.0 and 1.0.0 produce byte-identical manifests apart from the
+`chart` label — with defaults, with a full 0.7.0 values file, with the legacy keys set on
+the command line, and with their new-shape equivalents. CI installs the deprecated layout
+on a real cluster (`ci/legacy-values.yaml`) rather than trusting the template tests alone.
+
 ## 0.7.0
 
 Absorbs 0.6.0, which was tagged in the changelog but never packaged into `docs/` —
