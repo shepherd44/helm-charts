@@ -11,11 +11,6 @@ Each release is tagged in git as `cp-schema-registry-<version>`.
 
 ## 1.2.0
 
-Also the first release pushed to `ghcr.io/shepherd44/charts` as a cosign-signed OCI
-artifact, alongside the usual `docs/` tarball. Nothing about the chart changes — it is a
-second way to fetch the same bytes, with a signature and a digest that cannot be
-repackaged. See the repository README.
-
 Nothing here is on by default; a release that does not set these renders exactly what
 1.1.0 did.
 
