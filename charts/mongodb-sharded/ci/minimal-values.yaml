@@ -1,0 +1,27 @@
+# ct install: the smallest sharded topology that is still sharded.
+#
+# One shard instead of two and no persistence, because the point here is that the
+# chart's objects come up and talk to each other, not that MongoDB survives a
+# restart. Two shards doubles the pods for no extra coverage, and PVCs on a KinD
+# node only add teardown time.
+shards: 1
+
+auth:
+  rootPassword: ct-install-not-a-real-password
+
+configsvr:
+  replicaCount: 1
+  persistence:
+    enabled: false
+  resourcesPreset: nano
+
+shardsvr:
+  persistence:
+    enabled: false
+  dataNode:
+    replicaCount: 1
+    resourcesPreset: nano
+
+mongos:
+  replicaCount: 1
+  resourcesPreset: nano

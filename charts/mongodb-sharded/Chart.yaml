@@ -39,4 +39,4 @@ sources:
 - https://github.com/shepherd44/helm-charts/tree/main/charts/mongodb-sharded
 - https://github.com/shepherd44/containers/tree/main/containers/mongodb-sharded
 - https://github.com/bitnami/charts/tree/main/bitnami/mongodb-sharded
-version: 9.4.17
+version: 9.4.18

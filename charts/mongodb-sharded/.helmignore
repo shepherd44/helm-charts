@@ -23,3 +23,7 @@
 img/
 # Changelog
 CHANGELOG.md
+# Not part of the package: CI fixtures and template unit tests.
+# Anchored so nothing under templates/ is caught.
+/ci/
+/tests/
