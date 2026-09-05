@@ -15,6 +15,35 @@ GitHub Pages serves the repo root of `main` (legacy Jekyll build, no workflow), 
 `docs/` is live a minute or two after a push. `docs/` is a build output that is
 committed on purpose — do not gitignore it, and do not hand-edit `index.yaml`.
 
+## Work in a worktree
+
+**Never edit the primary checkout.** Every change — code, chart, docs — starts with a
+git worktree off `origin/main`:
+
+```shell
+BR=<type>/<short-name>            # feat, fix, chore, docs
+git fetch -q origin
+git worktree add -b "$BR" "/Users/james/workspace/helm-charts-wt/$BR" origin/main
+cd "/Users/james/workspace/helm-charts-wt/$BR"
+```
+
+`<repo>-wt/<branch>/` is the layout the other repos on this machine already use, so the
+path mirrors the branch name and several can exist at once.
+
+Branch off `origin/main`, not the local branch: the primary checkout is often parked on
+something unrelated, and `git worktree add` inherits whatever HEAD it is given.
+
+After the branch is merged, remove the worktree — a stale one is a second checkout that
+silently goes out of date:
+
+```shell
+git worktree remove /Users/james/workspace/helm-charts-wt/$BR
+git branch -d $BR
+```
+
+Package and index inside the worktree, so `docs/` and the chart change land in the same
+commit. Publishing still only happens when that commit reaches `main`.
+
 ## Rules
 
 **A published version is immutable.** `docs/` holds real artifacts people may have
