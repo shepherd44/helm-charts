@@ -9,12 +9,52 @@ no upstream changelog to keep alongside this one.
 
 Each release is tagged in git as `cp-schema-registry-<version>`.
 
-## 0.6.0
+## 0.7.0
 
-Nothing about the running workload changes. The only new object is the `helm test` hook,
-which Helm creates on `helm test` and never on install or upgrade; every other rendered
-manifest is identical to 0.5.0 apart from the `chart` label. This release is about the
-chart being checkable.
+Absorbs 0.6.0, which was tagged in the changelog but never packaged into `docs/` —
+there is no published 0.6.0 to be immutable about, so the two are one release.
+
+Identity and secrets:
+
+- **ServiceAccount** (`schema_registry.serviceAccount`, created by default). The pods ran
+  as the namespace's `default` ServiceAccount with its API token mounted at
+  `/var/run/secrets/kubernetes.io/serviceaccount`. Schema Registry talks to Kafka and
+  never to the Kubernetes API, so that token was a credential nothing used;
+  `automountServiceAccountToken` is now false. The ServiceAccount is also where cloud
+  identity annotations go (EKS IRSA, GKE Workload Identity), which could not be put on
+  the shared `default` without affecting every other workload in the namespace.
+- **`envFrom`, `extraVolumes`, `extraVolumeMounts`.** Everything in
+  `configurationOverrides` is rendered as a literal env value, so connecting to a real
+  Kafka meant `kafkastore.sasl.jaas.config` — which contains `password="..."` — and the
+  truststore and keystore passwords sitting in plaintext in the Deployment spec, readable
+  with `kubectl get deploy -o yaml` and committed verbatim into any GitOps repo. There
+  was no way to avoid it. The server container also had no `volumeMounts` at all, so a
+  JKS truststore could not be mounted.
+
+Pass-throughs, all empty by default: `initContainers`, `extraContainers`,
+`priorityClassName`, `terminationGracePeriodSeconds`.
+
+Fixes:
+
+- **The raw JMX port is declared whenever `jmx.port` is set**, instead of only when the
+  exporter sidecar is enabled. `JMX_PORT` was always set on the container, so the JVM was
+  listening either way; the gate only hid the port from anyone attaching jconsole without
+  also running a second JVM. Existing releases gain a `containerPort: 5555` declaration.
+- **`schemaRegistryOpts` exists in `values.yaml`.** The template has always rendered
+  `SCHEMA_REGISTRY_OPTS` from it and the README documented it, but the key was missing
+  from the values file, so it was invisible to anyone reading it.
+
+Metadata: `home`, `maintainers` and Artifact Hub annotations in `Chart.yaml`. `images`
+there is documentation for this chart — it bundles no `common` library, so nothing
+enforces it — but it is what an installer reads, so it tracks `values.yaml`.
+
+Also documented: this chart ships no HPA or KEDA support, on purpose. See the README.
+
+### From 0.6.0
+
+Nothing in this half changes the running workload. Its only new object is the `helm test`
+hook, which Helm creates on `helm test` and never on install or upgrade. This half is
+about the chart being checkable.
 
 - **`kubeVersion: ">=1.22.0-0"`.** The floor is now declared, so Helm refuses to install
   on anything older instead of failing at apply time. Everything the chart emits already

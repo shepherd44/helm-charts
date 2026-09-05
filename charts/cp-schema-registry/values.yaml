@@ -49,6 +49,11 @@ schema_registry:
   ## Set it together with resources.limits.memory, not on its own.
   heapOptions: ""
 
+  ## Extra JVM options, passed as SCHEMA_REGISTRY_OPTS. Distinct from heapOptions,
+  ## which is SCHEMA_REGISTRY_HEAP_OPTS. The template has always rendered this; the
+  ## key was just missing from this file.
+  schemaRegistryOpts: ""
+
   ## Probes. Set either to {} to omit it.
   ## `/subjects` needs the Kafka store to be readable, which is what readiness
   ## should mean here; `/` only needs Jetty, which is what liveness should mean.
@@ -89,6 +94,47 @@ schema_registry:
 
   ## Custom pod annotations
   podAnnotations: {}
+
+  ## ServiceAccount for the pods.
+  ## automountServiceAccountToken is false because Schema Registry talks to Kafka and
+  ## never to the Kubernetes API — the token is a credential nothing here uses. Set
+  ## `create: false` with an empty `name` to go back to the namespace default.
+  ## `annotations` is where cloud identity goes (EKS IRSA, GKE Workload Identity).
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+    labels: {}
+    automountServiceAccountToken: false
+
+  ## Env from existing Secrets or ConfigMaps. Use this for anything sensitive —
+  ## kafkastore.sasl.jaas.config, truststore and keystore passwords — because
+  ## configurationOverrides renders its values literally into the Deployment, where
+  ## `kubectl get deploy -o yaml` and every GitOps diff can read them.
+  ## Keys must already be spelled the way Schema Registry expects, e.g.
+  ## SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG.
+  envFrom: []
+    # - secretRef:
+    #     name: schema-registry-kafka-credentials
+
+  ## Extra volumes and mounts on the server container. A JKS truststore or keystore
+  ## comes in this way; the container mounts nothing by default.
+  extraVolumes: []
+    # - name: kafka-truststore
+    #   secret:
+    #     secretName: kafka-truststore
+  extraVolumeMounts: []
+    # - name: kafka-truststore
+    #   mountPath: /etc/schema-registry/secrets
+    #   readOnly: true
+
+  ## Pass-throughs. Empty by default, so they change nothing until set.
+  initContainers: []
+  extraContainers: []
+  priorityClassName: ""
+  ## Time to finish in-flight requests during a rolling update. Unset means the
+  ## Kubernetes default of 30s.
+  terminationGracePeriodSeconds: null
 
   ## Ingress for the Schema Registry REST API (servicePort).
   ## `name` defaults to the chart fullname; set it to adopt an Ingress that

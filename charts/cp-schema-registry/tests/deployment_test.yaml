@@ -80,3 +80,60 @@ tests:
       - equal:
           path: spec.template.metadata.annotations["prometheus.io/port"]
           value: "5556"
+
+  - it: runs as its own ServiceAccount and does not mount the API token
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: t-cp-schema-registry
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false
+
+  - it: falls back to the namespace default only when told not to create one
+    set:
+      schema_registry.serviceAccount.create: false
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: default
+
+  - it: declares the JMX port whenever jmx.port is set, exporter or not
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            containerPort: 5555
+            name: jmx
+
+  - it: takes env from existing secrets and mounts extra volumes
+    set:
+      schema_registry.envFrom:
+        - secretRef:
+            name: sr-creds
+      schema_registry.extraVolumes:
+        - name: truststore
+          secret:
+            secretName: truststore
+      schema_registry.extraVolumeMounts:
+        - name: truststore
+          mountPath: /etc/schema-registry/secrets
+          readOnly: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].envFrom
+          content:
+            secretRef:
+              name: sr-creds
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: truststore
+            mountPath: /etc/schema-registry/secrets
+            readOnly: true
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: truststore
+            secret:
+              secretName: truststore
