@@ -10,7 +10,7 @@ type: application
 ## The -0 suffix makes pre-release cluster versions such as 1.22.0-alpha.3 compare
 ## correctly instead of sorting below 1.22.0.
 kubeVersion: ">=1.22.0-0"
-version: 1.1.0
+version: 1.2.0
 appVersion: "7.9.9"
 keywords:
   - kafka
@@ -45,8 +45,10 @@ annotations:
       url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-schema-registry/docs/schema-registry-versions.md
   artifacthub.io/changes: |
     - kind: added
-      description: ServiceMonitor, PodMonitor and PrometheusRule for the Prometheus Operator
+      description: topologySpreadConstraints pass-through
     - kind: added
-      description: values.schema.json, so a mistyped key fails the install instead of rendering defaults
-    - kind: fixed
-      description: caller-supplied labels are merged rather than appended, which emitted a duplicate release key
+      description: optional NetworkPolicy, ingress by default and egress opt-in
+    - kind: added
+      description: "metrics.mode: native runs the exporter as a Kubernetes sidecar container (needs k8s 1.29+)"
+    - kind: added
+      description: a Kubernetes version table in the README, saying what to use below 1.29 and 1.30

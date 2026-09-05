@@ -1,0 +1,53 @@
+{{- $v := include "cp-schema-registry.values" . | fromYaml -}}
+{{- if $v.networkPolicy.enabled }}
+{{- $np := $v.networkPolicy }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ template "cp-schema-registry.fullname" . }}
+  labels:
+{{ include "cp-schema-registry.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+{{ include "cp-schema-registry.selectorLabels" . | indent 6 }}
+  policyTypes:
+    - Ingress
+    {{- if $np.egress.enabled }}
+    {{- /* Adding Egress here denies every outbound connection the rules below do not
+    allow — Kafka included. That is why it is a separate switch. */}}
+    - Egress
+    {{- end }}
+  ingress:
+    - ports:
+        - port: {{ $v.service.port }}
+          protocol: TCP
+        {{- if $v.metrics.enabled }}
+        - port: {{ $v.metrics.port }}
+          protocol: TCP
+        {{- end }}
+      {{- with $np.ingress.from }}
+      {{- /* An empty `from` allows any pod in the cluster on these ports, which is
+      still narrower than no policy: every other port is closed. */}}
+      from:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+    {{- with $np.ingress.extraRules }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  {{- if $np.egress.enabled }}
+  egress:
+    {{- if $np.egress.allowDNS }}
+    {{- /* Forgetting DNS is the classic way to break a release with an egress policy:
+    the Kafka bootstrap servers are a hostname. */}}
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- end }}
+    {{- with $np.egress.rules }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  {{- end }}
+{{- end }}

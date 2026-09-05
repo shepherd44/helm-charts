@@ -1,0 +1,94 @@
+suite: networkpolicy
+templates:
+  - networkpolicy.yaml
+release:
+  name: t
+tests:
+  - it: is not created by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: allows the REST port in, and nothing else, with ingress only
+    set:
+      networkPolicy.enabled: true
+    asserts:
+      - equal:
+          path: spec.policyTypes
+          value: [Ingress]
+      - equal:
+          path: spec.ingress[0].ports
+          value:
+            - port: 8081
+              protocol: TCP
+      - notExists:
+          path: spec.ingress[0].from
+      - notExists:
+          path: spec.egress
+
+  - it: opens the exporter port too when the sidecar runs
+    set:
+      networkPolicy.enabled: true
+      metrics.enabled: true
+    asserts:
+      - contains:
+          path: spec.ingress[0].ports
+          content:
+            port: 5556
+            protocol: TCP
+
+  - it: restricts the source when told to
+    set:
+      networkPolicy.enabled: true
+      networkPolicy.ingress.from:
+        - podSelector:
+            matchLabels:
+              app: producer
+    asserts:
+      - equal:
+          path: spec.ingress[0].from[0].podSelector.matchLabels.app
+          value: producer
+
+  - it: adds Egress to policyTypes only when egress is switched on, and never forgets DNS
+    set:
+      networkPolicy.enabled: true
+      networkPolicy.egress.enabled: true
+      networkPolicy.egress.rules:
+        - to:
+            - podSelector:
+                matchLabels:
+                  app: kafka
+          ports:
+            - port: 9092
+              protocol: TCP
+    asserts:
+      - equal:
+          path: spec.policyTypes
+          value: [Ingress, Egress]
+      - equal:
+          path: spec.egress[0].ports
+          value:
+            - port: 53
+              protocol: UDP
+            - port: 53
+              protocol: TCP
+      - equal:
+          path: spec.egress[1].to[0].podSelector.matchLabels.app
+          value: kafka
+
+  - it: can leave DNS out for someone who knows what they are doing
+    set:
+      networkPolicy.enabled: true
+      networkPolicy.egress.enabled: true
+      networkPolicy.egress.allowDNS: false
+      networkPolicy.egress.rules:
+        - to:
+            - ipBlock:
+                cidr: 10.0.0.0/8
+    asserts:
+      - lengthEqual:
+          path: spec.egress
+          count: 1
+      - equal:
+          path: spec.egress[0].to[0].ipBlock.cidr
+          value: 10.0.0.0/8

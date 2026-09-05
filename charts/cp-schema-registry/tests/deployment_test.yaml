@@ -156,3 +156,57 @@ tests:
     asserts:
       - notExists:
           path: spec.template.metadata.annotations["prometheus.io/scrape"]
+
+  - it: passes topology spread constraints through
+    set:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+    asserts:
+      - equal:
+          path: spec.template.spec.topologySpreadConstraints[0].topologyKey
+          value: topology.kubernetes.io/zone
+
+  - it: runs the exporter as an ordinary container by default
+    set:
+      metrics.enabled: true
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.containers
+          count: 2
+      - notExists:
+          path: spec.template.spec.initContainers
+
+  - it: moves the exporter to a native sidecar on request
+    set:
+      metrics.enabled: true
+      metrics.mode: native
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.containers
+          count: 1
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: prometheus-jmx-exporter
+      - equal:
+          path: spec.template.spec.initContainers[0].restartPolicy
+          value: Always
+      - equal:
+          path: spec.template.spec.initContainers[0].ports[0].name
+          value: metrics
+
+  - it: keeps the user's own init containers alongside a native exporter
+    set:
+      metrics.enabled: true
+      metrics.mode: native
+      initContainers:
+        - name: wait-for-kafka
+          image: busybox
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.initContainers
+          count: 2
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: wait-for-kafka
