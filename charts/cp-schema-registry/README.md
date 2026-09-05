@@ -29,7 +29,7 @@ carries its `LICENSE` verbatim, recovered from a surviving fork. Local changes a
 
 | | |
 |---|---|
-| Chart | `1.3.0` |
+| Chart | `1.4.0` |
 | Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
 
 Confluent supports each Community release for two years from its minor release date.
@@ -116,7 +116,7 @@ should follow, and the list is about to grow.
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 1.3.0 \
+  --version 1.4.0 \
   --set kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
@@ -127,7 +127,7 @@ With a values file:
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 1.3.0 -f my-values.yaml
+  --version 1.4.0 -f my-values.yaml
 ```
 
 ```yaml
@@ -408,6 +408,41 @@ required pod anti-affinity when the goal is "never two on one node". Worth pairi
 `podDisruptionBudget`: without a spread, three replicas can land on one node and the
 budget protects nothing against a drain of it.
 
+## Labels and annotations
+
+`commonLabels` and `commonAnnotations` go on **every** object the chart renders —
+Deployment, Service, ServiceAccount, ConfigMap, PodDisruptionBudget, Ingress, HTTPRoute,
+the monitors, and the `helm test` pod:
+
+```yaml
+commonLabels:
+  buzzni.com/team: de
+commonAnnotations:
+  buzzni.com/maintainer: james
+```
+
+Per-resource keys are merged on top and win where they overlap:
+
+| object | labels | annotations |
+|---|---|---|
+| Deployment | `deployment.labels` | `deployment.annotations` |
+| pods | `podLabels` | `podAnnotations` |
+| Service | `service.labels` | `service.annotations` |
+| ServiceAccount | `serviceAccount.labels` | `serviceAccount.annotations` |
+| PodDisruptionBudget | `podDisruptionBudget.labels` | `podDisruptionBudget.annotations` |
+| Ingress | `ingress.labels` | `ingress.annotations` |
+| HTTPRoute | `httpRoute.labels` | `httpRoute.annotations` |
+| ServiceMonitor / PodMonitor / PrometheusRule | `metrics.<kind>.labels` | `metrics.<kind>.annotations` |
+| ConfigMap, test pod | common only | common only |
+
+Precedence, lowest first: the chart's own labels, `commonLabels`, then the per-resource
+key.
+
+**None of this reaches the Deployment's `spec.selector`.** A selector is immutable, so it
+keeps only the legacy `app`/`release` pair; a label added there would break
+`helm upgrade` on every existing release. `podLabels` does reach the pod template, which
+is fine — the selector is a subset of it.
+
 ## Credentials
 
 `configurationOverrides` renders every value literally into the Deployment:
@@ -637,7 +672,16 @@ carry extra values through wrappers — and strict inside the maps the chart own
 | `httpRoute.rules` | Full rule list; empty means route `/` to the Service | `[]` |
 | `schemaRegistryOpts` | Extra `SCHEMA_REGISTRY_OPTS` | unset |
 | `resources` | Requests and limits | `{}` |
+| `commonLabels` | Labels added to every object | `{}` |
+| `commonAnnotations` | Annotations added to every object | `{}` |
+| `deployment.labels` | Extra labels on the Deployment | `{}` |
+| `deployment.annotations` | Extra annotations on the Deployment | `{}` |
+| `podLabels` | Extra labels on the pods | `{}` |
 | `podAnnotations` | Annotations on the pod | `{}` |
+| `service.labels` | Extra labels on the Service | `{}` |
+| `service.annotations` | Extra annotations on the Service | `{}` |
+| `podDisruptionBudget.labels` | Extra labels on the PDB | `{}` |
+| `podDisruptionBudget.annotations` | Extra annotations on the PDB | `{}` |
 | `nodeSelector` | Node selector | `{}` |
 | `tolerations` | Tolerations | `[]` |
 | `affinity` | Affinity | `{}` |

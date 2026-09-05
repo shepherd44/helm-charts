@@ -1,0 +1,79 @@
+suite: labels and annotations
+release:
+  name: t
+tests:
+  - it: puts commonLabels and commonAnnotations on every object
+    templates:
+      - deployment.yaml
+      - service.yaml
+      - serviceaccount.yaml
+      - jmx-configmap.yaml
+    set:
+      metrics.enabled: true
+      commonLabels:
+        team: de
+      commonAnnotations:
+        owner: james
+    asserts:
+      - equal:
+          path: metadata.labels["team"]
+          value: de
+      - equal:
+          path: metadata.annotations["owner"]
+          value: james
+
+  - it: lets a per-resource label win over the common one
+    templates:
+      - service.yaml
+    set:
+      commonLabels:
+        tier: shared
+      service:
+        labels:
+          tier: api
+    asserts:
+      - equal:
+          path: metadata.labels["tier"]
+          value: api
+
+  - it: never lets either reach the immutable selector
+    templates:
+      - deployment.yaml
+    set:
+      commonLabels:
+        team: de
+      podLabels:
+        tier: api
+    asserts:
+      - equal:
+          path: spec.selector.matchLabels
+          value:
+            app: cp-schema-registry
+            release: t
+      - equal:
+          path: spec.template.metadata.labels["tier"]
+          value: api
+      - equal:
+          path: spec.template.metadata.labels["team"]
+          value: de
+
+  - it: keeps the hook annotations on the test pod
+    templates:
+      - tests/test-connection.yaml
+    set:
+      commonAnnotations:
+        owner: james
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: test
+      - equal:
+          path: metadata.annotations["owner"]
+          value: james
+
+  - it: adds no annotations block when there is nothing to put in it
+    templates:
+      - service.yaml
+    asserts:
+      - notExists:
+          path: metadata.annotations

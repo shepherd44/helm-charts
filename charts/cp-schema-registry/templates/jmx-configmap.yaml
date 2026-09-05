@@ -5,7 +5,11 @@ kind: ConfigMap
 metadata:
   name: {{ template "cp-schema-registry.fullname" . }}-jmx-configmap
   labels:
-{{ include "cp-schema-registry.labels" . | indent 4 }}
+{{ include "cp-schema-registry.mergedLabels" (list . dict) | indent 4 }}
+  {{- with (include "cp-schema-registry.mergedAnnotations" (list . dict)) }}
+  annotations:
+{{ . | indent 4 }}
+  {{- end }}
 data:
   jmx-schema-registry-prometheus.yml: |+
     jmxUrl: service:jmx:rmi:///jndi/rmi://localhost:{{ $v.jmx.port }}/jmxrmi

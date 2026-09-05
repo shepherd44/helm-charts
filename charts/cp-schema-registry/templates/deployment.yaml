@@ -4,7 +4,11 @@ kind: Deployment
 metadata:
   name: {{ template "cp-schema-registry.fullname" . }}
   labels:
-{{ include "cp-schema-registry.labels" . | indent 4 }}
+{{ include "cp-schema-registry.mergedLabels" (list . $v.deployment.labels) | indent 4 }}
+  {{- with (include "cp-schema-registry.mergedAnnotations" (list . $v.deployment.annotations)) }}
+  annotations:
+{{ . | indent 4 }}
+  {{- end }}
 spec:
   replicas: {{ $v.replicaCount }}
   selector:
@@ -13,8 +17,11 @@ spec:
   template:
     metadata:
       labels:
-{{ include "cp-schema-registry.labels" . | indent 8 }}
+{{ include "cp-schema-registry.mergedLabels" (list . $v.podLabels) | indent 8 }}
       annotations:
+      {{- with (include "cp-schema-registry.mergedAnnotations" (list . dict)) }}
+{{ . | indent 8 }}
+      {{- end }}
         {{/* kubectl logs/exec 가 사이드카가 아니라 서버 컨테이너를 고르게 한다. */}}
         kubectl.kubernetes.io/default-container: {{ template "cp-schema-registry.name" . }}-server
       {{- range $key, $value := $v.podAnnotations }}

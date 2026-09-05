@@ -9,9 +9,9 @@ metadata:
   namespace: {{ $sm.namespace | default .Release.Namespace }}
   labels:
 {{ include "cp-schema-registry.mergedLabels" (list . $sm.labels) | indent 4 }}
-  {{- with $sm.annotations }}
+  {{- with (include "cp-schema-registry.mergedAnnotations" (list . $sm.annotations)) }}
   annotations:
-{{ toYaml . | indent 4 }}
+{{ . | indent 4 }}
   {{- end }}
 spec:
   {{- with $sm.jobLabel }}

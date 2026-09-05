@@ -10,9 +10,9 @@ metadata:
   name: {{ $hr.name | default (include "cp-schema-registry.fullname" .) }}
   labels:
 {{ include "cp-schema-registry.mergedLabels" (list . $hr.labels) | indent 4 }}
-  {{- with $hr.annotations }}
+  {{- with (include "cp-schema-registry.mergedAnnotations" (list . $hr.annotations)) }}
   annotations:
-{{ toYaml . | indent 4 }}
+{{ . | indent 4 }}
   {{- end }}
 spec:
   parentRefs:

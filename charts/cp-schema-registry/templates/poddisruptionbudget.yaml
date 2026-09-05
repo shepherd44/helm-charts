@@ -5,7 +5,11 @@ kind: PodDisruptionBudget
 metadata:
   name: {{ template "cp-schema-registry.fullname" . }}
   labels:
-{{ include "cp-schema-registry.labels" . | indent 4 }}
+{{ include "cp-schema-registry.mergedLabels" (list . $v.podDisruptionBudget.labels) | indent 4 }}
+  {{- with (include "cp-schema-registry.mergedAnnotations" (list . $v.podDisruptionBudget.annotations)) }}
+  annotations:
+{{ . | indent 4 }}
+  {{- end }}
 spec:
   {{- if $v.podDisruptionBudget.minAvailable }}
   minAvailable: {{ $v.podDisruptionBudget.minAvailable }}
