@@ -157,10 +157,18 @@ VERSION=$(awk '/^version:/{print $2}' charts/$CHART/Chart.yaml)
 helm dependency update ./charts/$CHART
 
 helm package ./charts/$CHART --destination docs
+
+git show HEAD:docs/index.yaml > /tmp/base-index.yaml
 helm repo index docs --url https://shepherd44.github.io/helm-charts/docs --merge docs/index.yaml
+python3 hack/verify-index.py docs --baseline /tmp/base-index.yaml --restore-created
 ```
 
-`--merge` keeps the `created` timestamps of charts this release did not touch.
+`--merge` alone is no longer enough. It regenerates the entry for every `.tgz` still
+sitting in `docs/`, so under Helm 4 a one-chart release rewrites the `created` timestamp
+of every published version and the diff touches every chart. `--restore-created` puts
+them back, editing the file as text so quoting and block scalars survive, and the same
+script then re-verifies. CI fails the PR if any of them drifted.
+
 A published `.tgz` is immutable: to change a chart, bump its version rather than
 repackaging one that is already live.
 

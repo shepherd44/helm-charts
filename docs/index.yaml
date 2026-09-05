@@ -1,6 +1,52 @@
 apiVersion: v1
 entries:
   cp-schema-registry:
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: ServiceAccount, with the API token no longer mounted into the pods
+        - kind: added
+          description: envFrom, extraVolumes and extraVolumeMounts, so Kafka credentials need not be plaintext env
+        - kind: added
+          description: kubeVersion floor of 1.22, a helm test hook, and pod-spec pass-throughs
+        - kind: fixed
+          description: the raw JMX port is declared whenever jmx.port is set, not only with the exporter
+      artifacthub.io/images: |
+        - name: cp-schema-registry
+          image: confluentinc/cp-schema-registry:7.9.9
+        - name: jmx-exporter
+          image: shepherd9664/jmx-exporter:1.6.0-latest
+        - name: test-connection
+          image: curlimages/curl:8.11.1
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart source
+          url: https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+        - name: Changelog
+          url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-schema-registry/CHANGELOG.md
+        - name: Schema Registry version reference
+          url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-schema-registry/docs/schema-registry-versions.md
+    apiVersion: v2
+    appVersion: 7.9.9
+    created: "2026-09-05T11:56:04.163059+09:00"
+    description: A Helm chart for Confluent Schema Registry on Kubernetes
+    digest: 637eb615a8c88e700c37ef48c67ae04f65a3a31711842a5caf50fb72adba007d
+    home: https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+    keywords:
+    - kafka
+    - schema-registry
+    - confluent
+    kubeVersion: '>=1.22.0-0'
+    maintainers:
+    - name: shepherd44
+      url: https://github.com/shepherd44
+    name: cp-schema-registry
+    sources:
+    - https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+    type: application
+    urls:
+    - https://shepherd44.github.io/helm-charts/docs/cp-schema-registry-0.7.0.tgz
+    version: 0.7.0
   - apiVersion: v2
     appVersion: 7.9.9
     created: "2026-09-05T08:44:28.166987+09:00"
@@ -118,4 +164,4 @@ entries:
     urls:
     - https://shepherd44.github.io/helm-charts/docs/mongodb-sharded-9.4.17.tgz
     version: 9.4.17
-generated: "2026-09-05T08:44:28.163902+09:00"
+generated: "2026-09-05T11:56:04.160477+09:00"
