@@ -3,6 +3,50 @@ entries:
   cp-schema-registry:
   - annotations:
       artifacthub.io/changes: |
+        - kind: added
+          description: ServiceMonitor, PodMonitor and PrometheusRule for the Prometheus Operator
+        - kind: added
+          description: values.schema.json, so a mistyped key fails the install instead of rendering defaults
+        - kind: fixed
+          description: caller-supplied labels are merged rather than appended, which emitted a duplicate release key
+      artifacthub.io/images: |
+        - name: cp-schema-registry
+          image: confluentinc/cp-schema-registry:7.9.9
+        - name: jmx-exporter
+          image: shepherd9664/jmx-exporter:1.6.0-latest
+        - name: test-connection
+          image: curlimages/curl:8.11.1
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart source
+          url: https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+        - name: Changelog
+          url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-schema-registry/CHANGELOG.md
+        - name: Schema Registry version reference
+          url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-schema-registry/docs/schema-registry-versions.md
+    apiVersion: v2
+    appVersion: 7.9.9
+    created: "2026-09-05T13:18:40.966913+09:00"
+    description: A Helm chart for Confluent Schema Registry on Kubernetes
+    digest: ec336626c4e2fd64ececd958185c2b7b799ee223d438c5e7425f8e9fb532a33c
+    home: https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+    keywords:
+    - kafka
+    - schema-registry
+    - confluent
+    kubeVersion: '>=1.22.0-0'
+    maintainers:
+    - name: shepherd44
+      url: https://github.com/shepherd44
+    name: cp-schema-registry
+    sources:
+    - https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+    type: application
+    urls:
+    - https://shepherd44.github.io/helm-charts/docs/cp-schema-registry-1.1.0.tgz
+    version: 1.1.0
+  - annotations:
+      artifacthub.io/changes: |
         - kind: changed
           description: "BREAKING: values are flat; the schema_registry block still works but is deprecated"
         - kind: changed
@@ -210,4 +254,4 @@ entries:
     urls:
     - https://shepherd44.github.io/helm-charts/docs/mongodb-sharded-9.4.17.tgz
     version: 9.4.17
-generated: "2026-09-05T12:15:18.905443+09:00"
+generated: "2026-09-05T13:18:40.961003+09:00"
