@@ -1,14 +1,18 @@
-# Chart changelog
+# Changelog
 
 Chart versions of `cp-schema-registry`. The chart's own line, not Confluent's — see
-[schema-registry-versions.md](schema-registry-versions.md) for the application side.
+[docs/schema-registry-versions.md](docs/schema-registry-versions.md) for the application
+side.
+
+Forked from `confluentinc/cp-helm-charts`, a repository that no longer exists, so there is
+no upstream changelog to keep alongside this one.
 
 Each release is tagged in git as `cp-schema-registry-<version>`.
 
 ## 0.5.0
 
 Acting on the field inventory in
-[schema-registry-versions.md](schema-registry-versions.md).
+[docs/schema-registry-versions.md](docs/schema-registry-versions.md).
 
 - **`master.eligibility` → `leader.eligibility`.** The chart hardcoded
   `SCHEMA_REGISTRY_MASTER_ELIGIBILITY`, which carries `@Deprecated` upstream. It is now

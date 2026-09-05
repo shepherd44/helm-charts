@@ -32,8 +32,8 @@
 >
 > No `bitnamilegacy` images remain.
 >
-> [docs/CHANGELOG.md](docs/CHANGELOG.md) records this fork's releases. The `CHANGELOG.md`
-> at the chart root is bitnami's, vendored with the rest of the chart.
+> [CHANGELOG.md](CHANGELOG.md) records this fork's releases, with bitnami's own history
+> kept below them.
 >
 > Everything below is upstream documentation and still refers to Bitnami.
 

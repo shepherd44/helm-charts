@@ -2,7 +2,7 @@
 
 The application side: which Confluent Platform version this chart's `imageTag` should
 point at, and what changes between lines. For the chart's own history see
-[CHANGELOG.md](CHANGELOG.md).
+[CHANGELOG.md](../CHANGELOG.md).
 
 Everything below was checked against primary sources — Confluent's interoperability
 matrix, the `confluentinc/schema-registry` source at each tag, Docker Hub tags, and a

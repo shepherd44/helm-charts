@@ -58,12 +58,17 @@ sources:
 | [`common`](charts/common/README.md) | — | bitnami library chart, dependency of `mongodb-sharded`, not published |
 
 Each chart README has an install section with a values file worth starting from, and a
-`docs/CHANGELOG.md` covering that chart's releases here.
+`CHANGELOG.md` at the chart root covering that chart's releases here.
 
-For a forked chart, `docs/` is deliberately not the chart root: `mongodb-sharded` and
-`common` already ship an upstream `CHANGELOG.md` there, vendored with the rest of the
-chart, and overwriting it would lose bitnami's history and create a merge conflict on the
-next re-vendor. Ours lives alongside it rather than on top of it.
+A forked chart takes over that file rather than adding a second one beside it. This is
+what forks actually do — OpenTofu, OpenSearch and OpenBao all own their upstream's
+`CHANGELOG.md` — and the alternatives are not conventions: a GitHub-wide search finds one
+repository using `CHANGELOG.fork.md` and none using `CHANGELOG.downstream.md`.
+
+Upstream's entries are kept in the same file, below the fork's, under a heading that says
+whose they are. Re-vendoring a later upstream release means merging their new entries into
+that lower section, which is a conflict worth having: it happens exactly when someone is
+already reading upstream's changes.
 
 ### mongodb-sharded: which MongoDB series
 
