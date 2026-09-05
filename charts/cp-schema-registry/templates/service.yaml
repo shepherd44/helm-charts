@@ -1,3 +1,4 @@
+{{- $v := include "cp-schema-registry.values" . | fromYaml -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -7,10 +8,10 @@ metadata:
 spec:
   ports:
     - name: schema-registry
-      port: {{ .Values.schema_registry.servicePort }}
-    {{- if .Values.schema_registry.prometheus.jmx.enabled }}
+      port: {{ $v.service.port }}
+    {{- if $v.metrics.enabled }}
     - name: metrics
-      port: {{ .Values.schema_registry.prometheus.jmx.port }}
+      port: {{ $v.metrics.port }}
     {{- end }}
   selector:
 {{ include "cp-schema-registry.selectorLabels" . | indent 4 }}

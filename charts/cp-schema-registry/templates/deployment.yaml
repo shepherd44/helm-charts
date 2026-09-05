@@ -1,3 +1,4 @@
+{{- $v := include "cp-schema-registry.values" . | fromYaml -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -5,7 +6,7 @@ metadata:
   labels:
 {{ include "cp-schema-registry.labels" . | indent 4 }}
 spec:
-  replicas: {{ .Values.schema_registry.replicaCount }}
+  replicas: {{ $v.replicaCount }}
   selector:
     matchLabels:
 {{ include "cp-schema-registry.selectorLabels" . | indent 6 }}
@@ -16,61 +17,61 @@ spec:
       annotations:
         {{/* kubectl logs/exec 가 사이드카가 아니라 서버 컨테이너를 고르게 한다. */}}
         kubectl.kubernetes.io/default-container: {{ template "cp-schema-registry.name" . }}-server
-      {{- range $key, $value := .Values.schema_registry.podAnnotations }}
+      {{- range $key, $value := $v.podAnnotations }}
         {{ $key }}: {{ $value | quote }}
       {{- end }}
-      {{- if .Values.schema_registry.prometheus.jmx.enabled }}
+      {{- if $v.metrics.enabled }}
         prometheus.io/scrape: "true"
-        prometheus.io/port: {{ .Values.schema_registry.prometheus.jmx.port | quote }}
+        prometheus.io/port: {{ $v.metrics.port | quote }}
       {{- end }}
     spec:
       serviceAccountName: {{ include "cp-schema-registry.serviceAccountName" . }}
       {{- /* Schema Registry talks to Kafka, never to the Kubernetes API, so the token
       the default ServiceAccount would mount is a credential with no use here. */}}
-      automountServiceAccountToken: {{ .Values.schema_registry.serviceAccount.automountServiceAccountToken }}
-      {{- with .Values.schema_registry.priorityClassName }}
+      automountServiceAccountToken: {{ $v.serviceAccount.automountServiceAccountToken }}
+      {{- with $v.priorityClassName }}
       priorityClassName: {{ . }}
       {{- end }}
-      {{- with .Values.schema_registry.terminationGracePeriodSeconds }}
+      {{- with $v.terminationGracePeriodSeconds }}
       terminationGracePeriodSeconds: {{ . }}
       {{- end }}
-      {{- with .Values.schema_registry.initContainers }}
+      {{- with $v.initContainers }}
       initContainers:
 {{ toYaml . | indent 8 }}
       {{- end }}
       securityContext:
-      {{- if .Values.schema_registry.securityContext }}
-{{ toYaml .Values.schema_registry.securityContext | indent 8 }}
+      {{- if $v.podSecurityContext }}
+{{ toYaml $v.podSecurityContext | indent 8 }}
       {{- end}}
       containers:
         - name: {{ template "cp-schema-registry.name" . }}-server
-          image: "{{ .Values.schema_registry.image }}:{{ .Values.schema_registry.imageTag }}"
-          imagePullPolicy: "{{ .Values.schema_registry.imagePullPolicy }}"
+          image: "{{ $v.image.repository }}:{{ $v.image.tag }}"
+          imagePullPolicy: "{{ $v.image.pullPolicy }}"
           ports:
             - name: schema-registry
-              containerPort: {{ .Values.schema_registry.servicePort }}
+              containerPort: {{ $v.service.port }}
               protocol: TCP
             {{- /* JMX_PORT is set on the container whenever jmx.port is, so the JVM is
             listening either way; gating the declaration on the exporter only hid it
             from anyone attaching jconsole without running a second JVM. */}}
-            {{- if .Values.schema_registry.jmx.port }}
-            - containerPort: {{ .Values.schema_registry.jmx.port }}
+            {{- if $v.jmx.port }}
+            - containerPort: {{ $v.jmx.port }}
               name: jmx
             {{- end }}
-          {{- with .Values.schema_registry.containerSecurityContext }}
+          {{- with $v.containerSecurityContext }}
           securityContext:
 {{ toYaml . | indent 12 }}
           {{- end }}
-          {{- with .Values.schema_registry.livenessProbe }}
+          {{- with $v.livenessProbe }}
           livenessProbe:
 {{ toYaml . | indent 12 }}
           {{- end }}
-          {{- with .Values.schema_registry.readinessProbe }}
+          {{- with $v.readinessProbe }}
           readinessProbe:
 {{ toYaml . | indent 12 }}
           {{- end }}
           resources:
-{{ toYaml .Values.schema_registry.resources | indent 12 }}
+{{ toYaml $v.resources | indent 12 }}
           env:
           {{- $cfg := fromYaml (include "cp-schema-registry.config" .) }}
           {{- if not (hasKey $cfg "host.name") }}
@@ -79,7 +80,7 @@ spec:
               fieldRef:
                 fieldPath: status.podIP
           {{- end }}
-          {{- with .Values.schema_registry.heapOptions }}
+          {{- with $v.heapOptions }}
           - name: SCHEMA_REGISTRY_HEAP_OPTS
             value: {{ . | quote }}
           {{- end }}
@@ -87,76 +88,76 @@ spec:
           - name: SCHEMA_REGISTRY_{{ $configName | replace "." "_" | upper }}
             value: {{ $configValue | quote }}
           {{- end }}
-          {{- range $key, $value := .Values.schema_registry.customEnv }}
+          {{- range $key, $value := $v.customEnv }}
           - name: {{ $key | quote }}
             value: {{ $value | quote }}
           {{- end }}
-          {{- if .Values.schema_registry.schemaRegistryOpts }}
+          {{- if $v.schemaRegistryOpts }}
           - name: SCHEMA_REGISTRY_OPTS
-            value: "{{ .Values.schema_registry.schemaRegistryOpts }}"
+            value: "{{ $v.schemaRegistryOpts }}"
           {{- end }}
-          {{- if .Values.schema_registry.jmx.port }}
+          {{- if $v.jmx.port }}
           - name: JMX_PORT
-            value: "{{ .Values.schema_registry.jmx.port }}"
+            value: "{{ $v.jmx.port }}"
           {{- end }}
           {{- /* Anything sensitive belongs here rather than in configurationOverrides,
           which renders values literally into the pod spec. */}}
-          {{- with .Values.schema_registry.envFrom }}
+          {{- with $v.envFrom }}
           envFrom:
 {{ toYaml . | indent 10 }}
           {{- end }}
-          {{- with .Values.schema_registry.extraVolumeMounts }}
+          {{- with $v.extraVolumeMounts }}
           volumeMounts:
 {{ toYaml . | indent 12 }}
           {{- end }}
-        {{- if .Values.schema_registry.prometheus.jmx.enabled }}
+        {{- if $v.metrics.enabled }}
         - name: prometheus-jmx-exporter
-          image: "{{ .Values.schema_registry.prometheus.jmx.image }}:{{ .Values.schema_registry.prometheus.jmx.imageTag }}"
-          imagePullPolicy: "{{ .Values.schema_registry.prometheus.jmx.imagePullPolicy }}"
+          image: "{{ $v.metrics.image.repository }}:{{ $v.metrics.image.tag }}"
+          imagePullPolicy: "{{ $v.metrics.image.pullPolicy }}"
           {{/* The image entrypoint is `java -jar jmx_prometheus_standalone.jar`, so
           only args are passed. The command this replaced carried
           -XX:+UseCGroupMemoryLimitForHeap and -XX:MaxRAMFraction=1, which JDK 11
           removed; they only worked because that image was JDK 8. */}}
           args:
-          - {{ .Values.schema_registry.prometheus.jmx.port | quote }}
+          - {{ $v.metrics.port | quote }}
           - /etc/jmx-schema-registry/jmx-schema-registry-prometheus.yml
           ports:
-          - containerPort: {{ .Values.schema_registry.prometheus.jmx.port }}
+          - containerPort: {{ $v.metrics.port }}
           resources:
-{{ toYaml .Values.schema_registry.prometheus.jmx.resources | indent 12 }}
+{{ toYaml $v.metrics.resources | indent 12 }}
           volumeMounts:
           - name: jmx-config
             mountPath: /etc/jmx-schema-registry
           securityContext:
-          {{- if .Values.schema_registry.prometheus.jmx.securityContext }}
-{{ toYaml .Values.schema_registry.prometheus.jmx.securityContext | indent 12 }}
+          {{- if $v.metrics.securityContext }}
+{{ toYaml $v.metrics.securityContext | indent 12 }}
           {{- end}}
         {{- end }}
-        {{- with .Values.schema_registry.extraContainers }}
+        {{- with $v.extraContainers }}
 {{ toYaml . | indent 8 }}
         {{- end }}
-      {{- if .Values.schema_registry.imagePullSecrets }}
+      {{- if $v.image.pullSecrets }}
       imagePullSecrets:
-{{ toYaml .Values.schema_registry.imagePullSecrets | indent 8 }}
+{{ toYaml $v.image.pullSecrets | indent 8 }}
       {{- end }}
       volumes:
-      {{- if .Values.schema_registry.prometheus.jmx.enabled }}
+      {{- if $v.metrics.enabled }}
       - name: jmx-config
         configMap:
           name: {{ template "cp-schema-registry.fullname" . }}-jmx-configmap
       {{- end }}
-      {{- with .Values.schema_registry.extraVolumes }}
+      {{- with $v.extraVolumes }}
 {{ toYaml . | indent 6 }}
       {{- end }}
-      {{- if .Values.schema_registry.nodeSelector }}
+      {{- if $v.nodeSelector }}
       nodeSelector:
-{{ toYaml .Values.schema_registry.nodeSelector | indent 8 }}
+{{ toYaml $v.nodeSelector | indent 8 }}
       {{- end }}
-      {{- if .Values.schema_registry.tolerations }}
+      {{- if $v.tolerations }}
       tolerations:
-{{ toYaml .Values.schema_registry.tolerations | indent 8 }}
+{{ toYaml $v.tolerations | indent 8 }}
       {{- end }}
-      {{- if .Values.schema_registry.affinity }}
+      {{- if $v.affinity }}
       affinity:
-{{ toYaml .Values.schema_registry.affinity | indent 8 }}
+{{ toYaml $v.affinity | indent 8 }}
       {{- end }}

@@ -1,0 +1,24 @@
+# ct install: the deprecated pre-1.0.0 layout, installed for real. Template tests
+# prove the mapping renders the right manifests; this proves a values file written
+# against 0.7.0 still produces a release that comes up and passes `helm test`.
+schema_registry:
+  kafka:
+    bootstrapServers: PLAINTEXT://kafka.kafka.svc.cluster.local:9092
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+  servicePort: 8081
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    runAsNonRoot: true
+  prometheus:
+    jmx:
+      enabled: true
+      port: 5556
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi

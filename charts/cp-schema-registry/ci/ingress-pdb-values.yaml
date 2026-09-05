@@ -1,21 +1,20 @@
 # ct install: the objects that only render behind a flag — Ingress and the PDB.
 # Two replicas so minAvailable: 1 does not block the drain it is meant to survive.
-schema_registry:
-  replicaCount: 2
-  kafka:
-    bootstrapServers: PLAINTEXT://kafka.kafka.svc.cluster.local:9092
-  resources:
-    requests:
-      cpu: 100m
-      memory: 512Mi
-  ingress:
-    enabled: true
-    className: nginx
-    hosts:
-      - host: schema-registry.ci.local
-        paths:
-          - path: /
-            pathType: Prefix
-  podDisruptionBudget:
-    enabled: true
-    minAvailable: 1
+replicaCount: 2
+kafka:
+  bootstrapServers: PLAINTEXT://kafka.kafka.svc.cluster.local:9092
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: schema-registry.ci.local
+      paths:
+        - path: /
+          pathType: Prefix
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

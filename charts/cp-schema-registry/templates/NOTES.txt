@@ -1,15 +1,16 @@
+{{- $v := include "cp-schema-registry.values" . | fromYaml -}}
 Confluent Schema Registry {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}).
 
 Fork of the deleted confluentinc/cp-helm-charts:
 https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
 
 REST API:
-  in-cluster  http://{{ include "cp-schema-registry.fullname" . }}:{{ .Values.schema_registry.servicePort }}
+  in-cluster  http://{{ include "cp-schema-registry.fullname" . }}:{{ $v.service.port }}
   port-forward
-    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "cp-schema-registry.fullname" . }} {{ .Values.schema_registry.servicePort }}:{{ .Values.schema_registry.servicePort }}
-    curl localhost:{{ .Values.schema_registry.servicePort }}/subjects
-{{- if .Values.schema_registry.ingress.enabled }}
-{{- range .Values.schema_registry.ingress.hosts }}
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "cp-schema-registry.fullname" . }} {{ $v.service.port }}:{{ $v.service.port }}
+    curl localhost:{{ $v.service.port }}/subjects
+{{- if $v.ingress.enabled }}
+{{- range $v.ingress.hosts }}
   ingress     http://{{ .host }}
 {{- end }}
 
@@ -21,7 +22,7 @@ Schemas live in the {{ index (fromYaml (include "cp-schema-registry.config" .)) 
 does not lose them.
 
 {{- $deprecated := fromYaml (include "cp-schema-registry.deprecatedConfig" .) }}
-{{- $cfg := .Values.schema_registry.configurationOverrides | default dict }}
+{{- $cfg := $v.configurationOverrides | default dict }}
 {{- $found := list }}
 {{- range $key, $replacement := $deprecated }}
 {{- if hasKey $cfg $key }}
@@ -38,8 +39,22 @@ These still work in Schema Registry 8.3 and are still accepted, but they carry
   - {{ . }}
 {{- end }}
 {{- end }}
-{{- if not .Values.schema_registry.leaderEligibility }}
+{{- if not $v.leaderEligibility }}
 
 NOTE: leaderEligibility is false, so no pod in this release can become the writer.
 Schema registration will fail unless another release is eligible.
+{{- end }}
+{{- if .Values.schema_registry }}
+
+WARNING: this release is configured through the deprecated `schema_registry` block.
+
+1.0.0 flattened the values: `schema_registry.replicaCount` is now `replicaCount`,
+`schema_registry.imageTag` is `image.tag`, `schema_registry.servicePort` is
+`service.port`, `schema_registry.securityContext` is `podSecurityContext`, and
+`schema_registry.prometheus.jmx` is `metrics`. Everything else keeps its name.
+
+The old block still works and renders exactly what it used to. It wins key by key:
+anything it sets overrides the same setting in the new shape, and anything it leaves
+out falls through, so a file can be migrated a piece at a time. See the migration
+table in the chart README.
 {{- end }}

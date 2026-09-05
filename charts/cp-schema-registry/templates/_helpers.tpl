@@ -1,5 +1,59 @@
 {{/* vim: set filetype=mustache: */}}
 {{/*
+Effective values.
+
+1.0.0 flattened the layout: everything used to live under `schema_registry`. That block
+still works: anything set there is mapped onto the new keys and merged over them, so the
+legacy block wins key by key and anything it leaves out falls through to the new shape.
+NOTES.txt warns when it is in use.
+
+Templates read the result of this, never .Values directly:
+
+    {{- $v := include "cp-schema-registry.values" . | fromYaml }}
+*/}}
+{{- define "cp-schema-registry.values" -}}
+{{- $new := omit .Values "schema_registry" -}}
+{{- $legacy := .Values.schema_registry | default dict -}}
+{{- if not $legacy -}}
+{{- toYaml $new -}}
+{{- else -}}
+{{/* Keys whose name or shape changed have to be moved by hand; everything else keeps
+     its name and comes across in the plain merge below. */}}
+{{- $mapped := omit $legacy "image" "imageTag" "imagePullPolicy" "imagePullSecrets" "servicePort" "securityContext" "prometheus" "tests" -}}
+{{- $image := dict -}}
+{{- if hasKey $legacy "image" }}{{- $_ := set $image "repository" $legacy.image -}}{{- end -}}
+{{- if hasKey $legacy "imageTag" }}{{- $_ := set $image "tag" $legacy.imageTag -}}{{- end -}}
+{{- if hasKey $legacy "imagePullPolicy" }}{{- $_ := set $image "pullPolicy" $legacy.imagePullPolicy -}}{{- end -}}
+{{- if hasKey $legacy "imagePullSecrets" }}{{- $_ := set $image "pullSecrets" ($legacy.imagePullSecrets | default list) -}}{{- end -}}
+{{- if $image }}{{- $_ := set $mapped "image" (mustMergeOverwrite (deepCopy $new.image) $image) -}}{{- end -}}
+{{- if hasKey $legacy "servicePort" }}{{- $_ := set $mapped "service" (dict "port" $legacy.servicePort) -}}{{- end -}}
+{{- if hasKey $legacy "securityContext" }}{{- $_ := set $mapped "podSecurityContext" $legacy.securityContext -}}{{- end -}}
+{{- $jmx := (($legacy.prometheus | default dict).jmx | default dict) -}}
+{{- if $jmx -}}
+{{- $metrics := omit $jmx "image" "imageTag" "imagePullPolicy" -}}
+{{- $mimage := dict -}}
+{{- if hasKey $jmx "image" }}{{- $_ := set $mimage "repository" $jmx.image -}}{{- end -}}
+{{- if hasKey $jmx "imageTag" }}{{- $_ := set $mimage "tag" $jmx.imageTag -}}{{- end -}}
+{{- if hasKey $jmx "imagePullPolicy" }}{{- $_ := set $mimage "pullPolicy" $jmx.imagePullPolicy -}}{{- end -}}
+{{- if $mimage }}{{- $_ := set $metrics "image" (mustMergeOverwrite (deepCopy $new.metrics.image) $mimage) -}}{{- end -}}
+{{- $_ := set $mapped "metrics" $metrics -}}
+{{- end -}}
+{{- $tests := $legacy.tests | default dict -}}
+{{- if $tests -}}
+{{- $t := omit $tests "image" "imageTag" "imagePullPolicy" "imagePullSecrets" -}}
+{{- $timage := dict -}}
+{{- if hasKey $tests "image" }}{{- $_ := set $timage "repository" $tests.image -}}{{- end -}}
+{{- if hasKey $tests "imageTag" }}{{- $_ := set $timage "tag" $tests.imageTag -}}{{- end -}}
+{{- if hasKey $tests "imagePullPolicy" }}{{- $_ := set $timage "pullPolicy" $tests.imagePullPolicy -}}{{- end -}}
+{{- if hasKey $tests "imagePullSecrets" }}{{- $_ := set $timage "pullSecrets" ($tests.imagePullSecrets | default list) -}}{{- end -}}
+{{- if $timage }}{{- $_ := set $t "image" (mustMergeOverwrite (deepCopy $new.tests.image) $timage) -}}{{- end -}}
+{{- $_ := set $mapped "tests" $t -}}
+{{- end -}}
+{{- toYaml (mustMergeOverwrite (deepCopy $new) $mapped) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Expand the name of the chart.
 */}}
 {{- define "cp-schema-registry.name" -}}
@@ -45,8 +99,9 @@ Form the Kafka URL. If Kafka is installed as part of this chart, use k8s service
 else use user-provided URL
 */}}
 {{- define "cp-schema-registry.kafka.bootstrapServers" -}}
-{{- if .Values.schema_registry.kafka.bootstrapServers -}}
-{{- .Values.schema_registry.kafka.bootstrapServers -}}
+{{- $v := include "cp-schema-registry.values" . | fromYaml -}}
+{{- if $v.kafka.bootstrapServers -}}
+{{- $v.kafka.bootstrapServers -}}
 {{- else -}}
 {{- printf "PLAINTEXT://%s:9092" (include "cp-kafka-rest.cp-kafka-headless.fullname" .) -}}
 {{- end -}}
@@ -57,10 +112,11 @@ The ServiceAccount to run as. Falls back to `default` only when the chart is tol
 not to create one and none is named — i.e. the pre-0.7.0 behaviour, opted into.
 */}}
 {{- define "cp-schema-registry.serviceAccountName" -}}
-{{- if .Values.schema_registry.serviceAccount.create -}}
-{{- default (include "cp-schema-registry.fullname" .) .Values.schema_registry.serviceAccount.name -}}
+{{- $v := include "cp-schema-registry.values" . | fromYaml -}}
+{{- if $v.serviceAccount.create -}}
+{{- default (include "cp-schema-registry.fullname" .) $v.serviceAccount.name -}}
 {{- else -}}
-{{- default "default" .Values.schema_registry.serviceAccount.name -}}
+{{- default "default" $v.serviceAccount.name -}}
 {{- end -}}
 {{- end -}}
 
@@ -117,16 +173,17 @@ host.name is not here: it is a fieldRef, not a value. The deployment emits it on
 when configurationOverrides does not set it.
 */}}
 {{- define "cp-schema-registry.config" -}}
-{{- $overrides := .Values.schema_registry.configurationOverrides | default dict -}}
+{{- $v := include "cp-schema-registry.values" . | fromYaml -}}
+{{- $overrides := $v.configurationOverrides | default dict -}}
 {{- $managed := dict
-      "listeners" (printf "http://0.0.0.0:%v" .Values.schema_registry.servicePort)
+      "listeners" (printf "http://0.0.0.0:%v" $v.service.port)
       "kafkastore.bootstrap.servers" (include "cp-schema-registry.kafka.bootstrapServers" .)
       "kafkastore.group.id" (include "cp-schema-registry.groupId" .)
 -}}
 {{/* Setting both spellings leaves it ambiguous which one Schema Registry honours,
      so the deprecated one being present explicitly means the chart stays out. */}}
 {{- if not (hasKey $overrides "master.eligibility") -}}
-{{- $_ := set $managed "leader.eligibility" (.Values.schema_registry.leaderEligibility | toString) -}}
+{{- $_ := set $managed "leader.eligibility" ($v.leaderEligibility | toString) -}}
 {{- end -}}
 {{- toYaml (merge (deepCopy $overrides) $managed) -}}
 {{- end -}}

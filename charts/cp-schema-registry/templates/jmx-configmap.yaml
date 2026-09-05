@@ -1,4 +1,5 @@
-{{- if and .Values.schema_registry.prometheus.jmx.enabled }}
+{{- $v := include "cp-schema-registry.values" . | fromYaml -}}
+{{- if and $v.metrics.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -7,7 +8,7 @@ metadata:
 {{ include "cp-schema-registry.labels" . | indent 4 }}
 data:
   jmx-schema-registry-prometheus.yml: |+
-    jmxUrl: service:jmx:rmi:///jndi/rmi://localhost:{{ .Values.schema_registry.jmx.port }}/jmxrmi
+    jmxUrl: service:jmx:rmi:///jndi/rmi://localhost:{{ $v.jmx.port }}/jmxrmi
     lowercaseOutputName: true
     lowercaseOutputLabelNames: true
     ssl: false

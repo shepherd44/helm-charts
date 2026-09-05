@@ -16,7 +16,7 @@ tests:
 
   - it: stays out of the spelling when the user sets the deprecated key explicitly
     set:
-      schema_registry.configurationOverrides:
+      configurationOverrides:
         master.eligibility: "false"
     asserts:
       - notMatchRegexRaw:
@@ -29,7 +29,7 @@ tests:
 
   - it: emits each config key exactly once when an override collides with a managed key
     set:
-      schema_registry.configurationOverrides:
+      configurationOverrides:
         kafkastore.group.id: mine
     asserts:
       - contains:
@@ -47,7 +47,7 @@ tests:
 
   - it: passes heapOptions through when set
     set:
-      schema_registry.heapOptions: -Xms512M -Xmx512M
+      heapOptions: -Xms512M -Xmx512M
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
@@ -69,7 +69,7 @@ tests:
 
   - it: adds the exporter as a second container when enabled
     set:
-      schema_registry.prometheus.jmx.enabled: true
+      metrics.enabled: true
     asserts:
       - lengthEqual:
           path: spec.template.spec.containers
@@ -92,7 +92,7 @@ tests:
 
   - it: falls back to the namespace default only when told not to create one
     set:
-      schema_registry.serviceAccount.create: false
+      serviceAccount.create: false
     asserts:
       - equal:
           path: spec.template.spec.serviceAccountName
@@ -108,14 +108,14 @@ tests:
 
   - it: takes env from existing secrets and mounts extra volumes
     set:
-      schema_registry.envFrom:
+      envFrom:
         - secretRef:
             name: sr-creds
-      schema_registry.extraVolumes:
+      extraVolumes:
         - name: truststore
           secret:
             secretName: truststore
-      schema_registry.extraVolumeMounts:
+      extraVolumeMounts:
         - name: truststore
           mountPath: /etc/schema-registry/secrets
           readOnly: true

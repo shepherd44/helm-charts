@@ -18,7 +18,7 @@ tests:
 
   - it: exposes a named metrics port when the exporter is enabled
     set:
-      schema_registry.prometheus.jmx.enabled: true
+      metrics.enabled: true
     asserts:
       - lengthEqual:
           path: spec.ports
