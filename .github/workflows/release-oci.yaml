@@ -57,10 +57,21 @@ jobs:
           echo "chart=$chart" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Package
+      # Deliberately not repackaged: `helm package` embeds a timestamp, so building
+      # the same chart twice gives two different sha256s. Pushing the tarball that
+      # is already committed in docs/ keeps the registry artifact byte-identical to
+      # what GitHub Pages serves, which is the only way "same chart, either channel"
+      # is checkable rather than just claimed.
+      - name: Locate the published tarball
+        id: pkg
         run: |
-          helm dependency update "charts/${{ steps.tag.outputs.chart }}"
-          helm package "charts/${{ steps.tag.outputs.chart }}" --destination /tmp/pkg
+          tgz="docs/${{ steps.tag.outputs.chart }}-${{ steps.tag.outputs.version }}.tgz"
+          if [ ! -f "$tgz" ]; then
+            echo "$tgz is not in this tag: tag the release commit after docs/ is merged" >&2
+            exit 1
+          fi
+          sha256sum "$tgz"
+          echo "path=$tgz" >> "$GITHUB_OUTPUT"
 
       - name: Push to ghcr.io
         id: push
@@ -68,13 +79,16 @@ jobs:
           # Lowercased: registry paths are case-sensitive and the owner is not.
           OWNER: ${{ github.repository_owner }}
         run: |
-          helm registry login ghcr.io -u '${{ github.actor }}' -p '${{ secrets.GITHUB_TOKEN }}'
+          # Two logins, on purpose: helm keeps its credentials in its own config and
+          # cosign reads ~/.docker/config.json. Without the docker login the push
+          # succeeds and the signature upload comes back UNAUTHORIZED.
+          echo '${{ secrets.GITHUB_TOKEN }}' | helm registry login ghcr.io -u '${{ github.actor }}' --password-stdin
+          echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
           repo="ghcr.io/$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')/charts"
           # helm push prints Pushed:/Digest: on stderr, not stdout, so the
           # redirect is load-bearing: without it the log is empty and the digest
           # comes out blank.
-          helm push "/tmp/pkg/${{ steps.tag.outputs.chart }}-${{ steps.tag.outputs.version }}.tgz" \
-            "oci://$repo" 2>&1 | tee /tmp/push.log
+          helm push "${{ steps.pkg.outputs.path }}" "oci://$repo" 2>&1 | tee /tmp/push.log
           digest=$(awk '/^Digest: /{print $2}' /tmp/push.log)
           if [ -z "$digest" ]; then
             echo "helm push reported no digest; refusing to sign a guessed reference" >&2
