@@ -53,6 +53,18 @@ else use user-provided URL
 {{- end -}}
 
 {{/*
+The ServiceAccount to run as. Falls back to `default` only when the chart is told
+not to create one and none is named — i.e. the pre-0.7.0 behaviour, opted into.
+*/}}
+{{- define "cp-schema-registry.serviceAccountName" -}}
+{{- if .Values.schema_registry.serviceAccount.create -}}
+{{- default (include "cp-schema-registry.fullname" .) .Values.schema_registry.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.schema_registry.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Default GroupId to Release Name but allow it to be overridden
 */}}
 {{- define "cp-schema-registry.groupId" -}}

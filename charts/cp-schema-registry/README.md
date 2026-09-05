@@ -22,7 +22,7 @@ This chart bootstraps a deployment of a Confluent Schema Registry
 
 | | |
 |---|---|
-| Chart | `0.6.0` |
+| Chart | `0.7.0` |
 | Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
 
 Confluent supports each Community release for two years from its minor release date.
@@ -40,7 +40,7 @@ The JMX exporter sidecar is **off by default** — see [Metrics](#metrics).
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.6.0 \
+  --version 0.7.0 \
   --set schema_registry.kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
@@ -51,7 +51,7 @@ With a values file:
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.6.0 -f my-values.yaml
+  --version 0.7.0 -f my-values.yaml
 ```
 
 ```yaml
@@ -176,6 +176,22 @@ schema_registry:
   livenessProbe: null      # omit entirely
 ```
 
+The pods run as their own ServiceAccount, created by the chart, with
+`automountServiceAccountToken: false`. Schema Registry talks to Kafka and never to the
+Kubernetes API, so the token the `default` ServiceAccount would have mounted was a
+credential nothing used. The ServiceAccount is also the only place cloud identity can be
+attached without affecting every other workload in the namespace:
+
+```yaml
+schema_registry:
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/schema-registry
+```
+
+Set `create: false` with an empty `name` to go back to the namespace default, or
+`create: false` with a `name` to use a ServiceAccount managed elsewhere.
+
 `schema_registry.containerSecurityContext` applies to the Schema Registry container:
 no privilege escalation, all capabilities dropped, `RuntimeDefault` seccomp.
 `readOnlyRootFilesystem` is deliberately absent — the Confluent image writes generated
@@ -212,10 +228,58 @@ The Schema Registry container is rendered first and the pod carries
 the server rather than the metrics sidecar. Before 0.4.0 the sidecar was `containers[0]`,
 which made its JVM startup output look like Schema Registry's.
 
+There is no HPA and no KEDA `ScaledObject`, deliberately. Schema Registry elects a single
+writer through the Kafka coordinator and forwards writes to it, so replicas do not
+multiply write capacity; the reads it serves come from an in-memory cache backed by the
+`_schemas` topic and are not CPU-bound. A CPU-metric HPA would mostly churn pods that
+each replay the schemas topic on startup, and since readiness hits `/subjects`, the churn
+shows up as pods that are slow to become ready rather than as throughput. Capacity here
+is a small fixed replica count chosen for availability — which is what
+`podDisruptionBudget` and pod anti-affinity are for.
+
 Object metadata carries both the legacy `app`/`release`/`chart`/`heritage` labels and the
 standard `app.kubernetes.io/*` set. The Deployment's `spec.selector` still uses only the
 legacy pair, on purpose: a selector is immutable, so changing it would break
 `helm upgrade` on every existing release.
+
+## Credentials
+
+`configurationOverrides` renders every value literally into the Deployment:
+
+```yaml
+- name: SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG
+  value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"sr\" password=\"hunter2\";"
+```
+
+That is readable with `kubectl get deploy -o yaml`, printed by `helm get manifest`, and
+committed verbatim into any GitOps repository that stores rendered manifests. Keep
+secrets out of it and use `envFrom` instead — the keys must already be spelled the way
+Schema Registry expects:
+
+```yaml
+schema_registry:
+  envFrom:
+    - secretRef:
+        name: schema-registry-kafka-credentials   # SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG, ...
+```
+
+A JKS truststore or keystore is mounted the same way. The server container mounts
+nothing by default:
+
+```yaml
+schema_registry:
+  extraVolumes:
+    - name: kafka-truststore
+      secret:
+        secretName: kafka-truststore
+  extraVolumeMounts:
+    - name: kafka-truststore
+      mountPath: /etc/schema-registry/secrets
+      readOnly: true
+  configurationOverrides:
+    kafkastore.ssl.truststore.location: /etc/schema-registry/secrets/truststore.jks
+    # the password comes from envFrom, not from here
+```
 
 ## Verify a release
 
@@ -332,6 +396,18 @@ helm install my-schema-registry shepherd44/cp-schema-registry \
 | `schema_registry.securityContext.fsGroup` | Supplementary GID | `1000` |
 | `schema_registry.securityContext.runAsNonRoot` | Refuse to run as root | `true` |
 | `schema_registry.jmx.port` | JMX port | `5555` |
+| `schema_registry.serviceAccount.create` | Create a ServiceAccount for the pods | `true` |
+| `schema_registry.serviceAccount.name` | Name of the ServiceAccount | fullname when created, `default` otherwise |
+| `schema_registry.serviceAccount.annotations` | ServiceAccount annotations (IRSA, Workload Identity) | `{}` |
+| `schema_registry.serviceAccount.labels` | ServiceAccount labels | `{}` |
+| `schema_registry.serviceAccount.automountServiceAccountToken` | Mount the API token into the pods | `false` |
+| `schema_registry.envFrom` | Env from existing Secrets/ConfigMaps — use this for credentials | `[]` |
+| `schema_registry.extraVolumes` | Extra pod volumes | `[]` |
+| `schema_registry.extraVolumeMounts` | Extra mounts on the server container | `[]` |
+| `schema_registry.initContainers` | Extra init containers | `[]` |
+| `schema_registry.extraContainers` | Extra sidecar containers | `[]` |
+| `schema_registry.priorityClassName` | Pod priority class | `""` |
+| `schema_registry.terminationGracePeriodSeconds` | Shutdown grace period | unset (Kubernetes default 30s) |
 | `schema_registry.tests.enabled` | Render the `helm test` hook | `true` |
 | `schema_registry.tests.image` | Test hook image (needs curl) | `curlimages/curl` |
 | `schema_registry.tests.imageTag` | Test hook image tag | `8.11.1` |
