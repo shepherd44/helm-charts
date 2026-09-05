@@ -96,7 +96,9 @@ jobs:
                       --set metrics.serviceMonitor.enabled=true
                       --set metrics.prometheusRule.enabled=true
                       --set 'metrics.prometheusRule.rules[0].alert=SchemaRegistryDown'
-                      --set 'metrics.prometheusRule.rules[0].expr=up == 0') ;;
+                      --set 'metrics.prometheusRule.rules[0].expr=up == 0'
+                      --set httpRoute.enabled=true
+                      --set 'httpRoute.parentRefs[0].name=ci-gateway') ;;
               */mongodb-sharded)
                 args=(--set metrics.enabled=true --set volumePermissions.enabled=true) ;;
               *)

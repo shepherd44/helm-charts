@@ -29,7 +29,7 @@ carries its `LICENSE` verbatim, recovered from a surviving fork. Local changes a
 
 | | |
 |---|---|
-| Chart | `1.2.0` |
+| Chart | `1.3.0` |
 | Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
 
 Confluent supports each Community release for two years from its minor release date.
@@ -59,6 +59,7 @@ cluster is never broken by leaving them alone; the table is for when you turn on
 | `networkPolicy` | 1.7 | works as-is — but do not put `endPort` in `extraRules`, that needs 1.25 |
 | `ingress` | 1.19 (`networking.k8s.io/v1`) | works as-is |
 | `podDisruptionBudget` | 1.21 (`policy/v1`) | works as-is |
+| `httpRoute` | Gateway API CRDs: `v1beta1` needs 1.23, `v1` needs 1.25 | `ingress` |
 | `metrics.serviceMonitor`, `podMonitor`, `prometheusRule` | not a Kubernetes version question | whatever the Prometheus Operator running there supports |
 
 Two of those deserve a warning rather than a row.
@@ -115,7 +116,7 @@ should follow, and the list is about to grow.
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 1.2.0 \
+  --version 1.3.0 \
   --set kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
@@ -126,7 +127,7 @@ With a values file:
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 1.2.0 -f my-values.yaml
+  --version 1.3.0 -f my-values.yaml
 ```
 
 ```yaml
@@ -233,6 +234,37 @@ anything controller-specific. `tls` takes the standard list of `{secretName, hos
 Schema Registry has no authentication of its own here. An Ingress publishes a writable
 API — anything that can reach it can register or delete schemas — so put it behind
 something, or keep it cluster-internal.
+
+## Gateway API
+
+`httpRoute.enabled` renders an `HTTPRoute` for clusters running a Gateway API controller.
+It is **independent of `ingress`**, not an either/or switch: during a migration people
+run both, and separate flags mean retiring one later is not a breaking change.
+
+```yaml
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: my-gateway
+      namespace: gateway-system
+  hostnames:
+    - schema-registry.example.com
+```
+
+With `rules` left empty the chart routes every path to its own Service, which is what
+the Ingress does too. Set `rules` to take over completely — matches, filters, timeouts,
+weighted backends; the chart then adds nothing of its own.
+
+`parentRefs` is required. An HTTPRoute with no parent attaches to no Gateway and silently
+routes nothing, so the chart fails rendering instead of shipping that.
+
+Nothing is auto-detected: the chart renders the object on any cluster, and whether it
+does anything depends on the CRDs and controller being there. `v1` needs Kubernetes 1.25
+(`v1beta1`, 1.23) — see [Kubernetes versions](#kubernetes-versions).
+
+The same warning as the Ingress applies, and harder: Schema Registry has no
+authentication of its own, so a route that reaches it from outside the cluster exposes a
+writable API.
 
 ## Health, scheduling, security
 
@@ -596,6 +628,13 @@ carry extra values through wrappers — and strict inside the maps the chart own
 | `ingress.annotations` | Ingress annotations | `{}` |
 | `ingress.hosts` | Hosts and paths | `[]` |
 | `ingress.tls` | TLS blocks | `[]` |
+| `httpRoute.enabled` | Create an HTTPRoute (Gateway API) | `false` |
+| `httpRoute.name` | Override the object name | fullname |
+| `httpRoute.labels` | Extra labels | `{}` |
+| `httpRoute.annotations` | Extra annotations | `{}` |
+| `httpRoute.parentRefs` | Gateways to attach to; required when enabled | `[]` |
+| `httpRoute.hostnames` | Hostnames to match | `[]` |
+| `httpRoute.rules` | Full rule list; empty means route `/` to the Service | `[]` |
 | `schemaRegistryOpts` | Extra `SCHEMA_REGISTRY_OPTS` | unset |
 | `resources` | Requests and limits | `{}` |
 | `podAnnotations` | Annotations on the pod | `{}` |

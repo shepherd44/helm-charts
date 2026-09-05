@@ -9,6 +9,22 @@ no upstream changelog to keep alongside this one.
 
 Each release is tagged in git as `cp-schema-registry-<version>`.
 
+## 1.3.0
+
+- **`httpRoute`.** An `HTTPRoute` for clusters running a Gateway API controller, off by
+  default. Deliberately **independent of `ingress`** rather than an either/or switch:
+  during a migration people run both, and separate flags mean retiring one later is not a
+  breaking change.
+
+  Left alone, `rules` routes every path to the chart's own Service — the same thing the
+  Ingress does — and setting it hands the routing over completely. `parentRefs` is
+  required, because an HTTPRoute with no parent attaches to no Gateway and silently routes
+  nothing.
+
+  Nothing is auto-detected. The object renders on any cluster; whether it does anything
+  depends on the CRDs and a controller being installed. `gateway.networking.k8s.io/v1`
+  needs Kubernetes 1.25, which the README's version table now records alongside the rest.
+
 ## 1.2.0
 
 Nothing here is on by default; a release that does not set these renders exactly what

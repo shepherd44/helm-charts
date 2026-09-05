@@ -1,0 +1,88 @@
+suite: httproute
+release:
+  name: t
+tests:
+  - it: is not created by default
+    templates:
+      - httproute.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: routes everything to the chart's own Service by default
+    templates:
+      - httproute.yaml
+    set:
+      httpRoute.enabled: true
+      httpRoute.parentRefs:
+        - name: my-gateway
+          namespace: gateway-system
+    asserts:
+      - equal:
+          path: spec.parentRefs[0].name
+          value: my-gateway
+      - equal:
+          path: spec.rules[0].matches[0].path
+          value:
+            type: PathPrefix
+            value: /
+      - equal:
+          path: spec.rules[0].backendRefs[0]
+          value:
+            name: t-cp-schema-registry
+            port: 8081
+
+  - it: hands the rules over completely when given some
+    templates:
+      - httproute.yaml
+    set:
+      httpRoute.enabled: true
+      httpRoute.parentRefs:
+        - name: my-gateway
+      httpRoute.hostnames:
+        - schema-registry.example.com
+      httpRoute.rules:
+        - matches:
+            - path:
+                type: PathPrefix
+                value: /subjects
+          backendRefs:
+            - name: elsewhere
+              port: 9081
+    asserts:
+      - equal:
+          path: spec.hostnames[0]
+          value: schema-registry.example.com
+      - equal:
+          path: spec.rules[0].backendRefs[0].name
+          value: elsewhere
+      - lengthEqual:
+          path: spec.rules
+          count: 1
+
+  - it: refuses a route with no Gateway to attach to
+    templates:
+      - httproute.yaml
+    set:
+      httpRoute.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "httpRoute.enabled is on but httpRoute.parentRefs is empty: an HTTPRoute with no parent attaches to no Gateway and routes nothing."
+
+  - it: coexists with the Ingress rather than replacing it
+    templates:
+      - httproute.yaml
+      - ingress.yaml
+    set:
+      ingress.enabled: true
+      ingress.hosts:
+        - host: sr.example.com
+          paths:
+            - path: /
+              pathType: Prefix
+      httpRoute.enabled: true
+      httpRoute.parentRefs:
+        - name: my-gateway
+    asserts:
+      - hasDocuments:
+          count: 1
