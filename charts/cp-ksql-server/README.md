@@ -1,17 +1,33 @@
-# CP-Schema Registry Helm Chart
-
-confluentinc에서 더이상 관리하지 않는 chart를 수정함
-https://github.com/confluentinc/cp-helm-charts/tree/master/charts/cp-ksql-server
-
-This chart bootstraps a deployment of a Confluent Schema Registry
-
 # KSQL Server Helm Chart
 
-This chart bootstraps a deployment of a Confluent KSQL Server.
+This chart bootstraps a deployment of a Confluent ksqlDB Server.
 
 This is an example deployment which runs KSQL Server in non-interactive
 mode.
 The included queries file `queries.sql` is a stub provided to illustrate one possible approach to mounting queries in the server container via ConfigMap.
+
+## Fork notice
+
+Forked from `confluentinc/cp-helm-charts`, `charts/cp-ksql-server`. Upstream archived
+that repository and the chart has had no maintainer there for years — the tables below
+still describe a 6.1.0 image and a Helm 2 install command, which is the state it was
+abandoned in.
+
+What this repository vendored is not upstream itself. It is the copy that the live
+`cp-ksqldb-server` release runs from in the `de-data-kafka` and `de-data-kafka-dev`
+namespaces, already patched once — Confluent image bumped to 7.9.0, chart renumbered to
+0.1.1. Both namespaces held byte-identical copies, so the base is unambiguous. Taking the
+running chart rather than an archived upstream is the point: it is what a future diff of
+the deployed configuration has to be taken against.
+
+Version numbers diverge from upstream here. Releases from this repository take the next
+number in this chart's own line and are never republished under an upstream number.
+
+## License
+
+Apache-2.0, inherited from `confluentinc/cp-helm-charts`. Upstream shipped no per-chart
+license file and the repository has since been deleted, so [LICENSE.md](LICENSE.md)
+carries its `LICENSE` verbatim, recovered from a surviving fork.
 
 ## Prerequisites
 
