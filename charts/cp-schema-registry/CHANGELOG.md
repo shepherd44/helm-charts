@@ -25,7 +25,10 @@ chart being checkable.
 - **`helm test` hook** (`schema_registry.tests`, on by default). A pod that curls
   `/subjects` on the release's own Service. It runs only on `helm test`, and proves what
   a successful install does not: the Service selector matches the pods, the port name
-  resolves, and the Kafka store is readable.
+  resolves, and the Kafka store is readable. Its `securityContext` pins a numeric
+  `runAsUser`, because `curlimages/curl` declares a named user and a kubelet cannot
+  verify a name against `runAsNonRoot` — it fails the container with
+  `CreateContainerConfigError` instead of starting it.
 - **`.helmignore` covers `ci/`, `tests/` and `.omc/`.** The CI values files and the
   template unit tests are repository content, not part of the package. The patterns are
   anchored with a leading slash on purpose — a bare `tests/` would also drop

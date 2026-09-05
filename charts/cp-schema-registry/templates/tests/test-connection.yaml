@@ -28,13 +28,8 @@ spec:
         - http://{{ template "cp-schema-registry.fullname" . }}:{{ .Values.schema_registry.servicePort }}/subjects
       resources:
 {{ toYaml .Values.schema_registry.tests.resources | indent 8 }}
+      {{- with .Values.schema_registry.tests.securityContext }}
       securityContext:
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
-        runAsNonRoot: true
-        capabilities:
-          drop:
-            - ALL
-        seccompProfile:
-          type: RuntimeDefault
+{{ toYaml . | indent 8 }}
+      {{- end }}
 {{- end }}
