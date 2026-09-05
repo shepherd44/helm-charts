@@ -117,6 +117,36 @@ Now that the list names our own registry, a mismatch is a warning rather than an
 so nothing will stop a stale annotation; keep it honest by hand. Setting
 `global.security.allowInsecureImages` only silences the check and is not the fix.
 
+## Checks
+
+CI runs on every pull request (`.github/workflows/ci.yaml`) and is the same set of
+commands worth running locally before pushing:
+
+```shell
+CHART=cp-schema-registry
+
+helm lint charts/$CHART
+helm template t charts/$CHART --set metrics.enabled=true --set volumePermissions.enabled=true
+helm unittest charts/$CHART                    # helm plugin install https://github.com/helm-unittest/helm-unittest
+helm template t charts/$CHART --kube-version 1.22.0 | kubeconform -strict -summary \
+  -kubernetes-version 1.22.0 -ignore-missing-schemas
+```
+
+What CI adds on top:
+
+- `ct lint`, which **fails a PR that changes a chart without bumping its version** — the
+  mechanical form of "a published version is immutable".
+- `ct install` on KinD at the declared Kubernetes floor and at a current version, against
+  a single-node Kafka deployed from `.github/ci/kafka.yaml`, followed by `helm test`.
+  The values it installs are `charts/<chart>/ci/*-values.yaml`.
+- The same lint and render under both the Helm 3 and Helm 4 clients.
+- `release-verify.yaml`, on any change under `docs/`: every version in `index.yaml` has
+  its `.tgz`, every digest matches the file, and no already-published version's digest
+  changed. Run it yourself with `python3 hack/verify-index.py docs`.
+
+Template unit tests live in `charts/<chart>/tests/*_test.yaml`; neither they nor `ci/`
+are packaged.
+
 ## Release
 
 ```shell

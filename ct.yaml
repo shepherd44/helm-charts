@@ -1,0 +1,17 @@
+# helm/chart-testing configuration. Shared by `ct lint` and `ct install`.
+remote: origin
+target-branch: main
+chart-dirs:
+  - charts
+excluded-charts:
+  # Library chart. It is a dependency of mongodb-sharded, never installed on its own.
+  - common
+chart-repos: []
+lint-conf: lintconf.yaml
+helm-extra-args: --timeout 600s
+# Chart.yaml carries no maintainers yet; ct otherwise resolves each one against the
+# GitHub API and fails. Flip this back on once the metadata issue lands.
+validate-maintainers: false
+# The point of running ct here: a changed chart must come with a version bump,
+# because a published version is immutable.
+check-version-increment: true
