@@ -1,0 +1,36 @@
+name: release-verify
+
+# docs/ is the published chart repo. This publishes nothing — it checks that what
+# is being committed is a consistent repo and that nothing already released was
+# quietly repackaged.
+on:
+  pull_request:
+    paths:
+      - docs/**
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+
+jobs:
+  index:
+    name: verify docs/index.yaml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - run: pip install pyyaml
+
+      - name: Baseline index from the target branch
+        run: |
+          base='${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD^' }}'
+          git show "$base:docs/index.yaml" > /tmp/base-index.yaml 2>/dev/null || : > /tmp/base-index.yaml
+
+      - name: Verify
+        run: python3 hack/verify-index.py docs --baseline /tmp/base-index.yaml

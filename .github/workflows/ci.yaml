@@ -1,0 +1,172 @@
+name: ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: lint / unit test / schema
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.list.outputs.changed }}
+      charts: ${{ steps.list.outputs.charts }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # ct diffs against the target branch, so it needs the history.
+          fetch-depth: 0
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.18.4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - uses: helm/chart-testing-action@v2.7.0
+
+      - name: List changed charts
+        id: list
+        run: |
+          charts=$(ct list-changed --config ct.yaml | tr '\n' ' ' | sed 's/ *$//')
+          if [ -z "$charts" ]; then
+            charts=$(find charts -mindepth 1 -maxdepth 1 -type d ! -name common | tr '\n' ' ' | sed 's/ *$//')
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No chart changed; validating all charts, skipping the install job."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "charts=$charts" >> "$GITHUB_OUTPUT"
+          echo "Charts: $charts"
+
+      # Also enforces the rule that a changed chart must come with a version bump.
+      - name: ct lint
+        run: ct lint --config ct.yaml
+
+      - name: Template unit tests
+        run: |
+          helm plugin install https://github.com/helm-unittest/helm-unittest
+          for chart in ${{ steps.list.outputs.charts }}; do
+            if [ -d "$chart/tests" ]; then
+              helm unittest "$chart"
+            else
+              echo "skip $chart: no tests/"
+            fi
+          done
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL -o /tmp/kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp kubeconform
+          sudo install /tmp/kubeconform /usr/local/bin/
+
+      # Renders every chart and validates the result against the real API schemas, at
+      # the declared floor and at a current version. CRD schemas (ServiceMonitor and
+      # friends) come from the datree catalog; anything with no schema is skipped rather
+      # than failed. The images are printed so a tag that was never built in
+      # shepherd44/containers shows up in the log instead of at install time.
+      #
+      # The optional pieces are per chart on purpose: `--set` on a key a chart does not
+      # have is accepted silently, so reusing one chart's flags on the other renders
+      # plain defaults and exits zero, which reads exactly like a passing check.
+      - name: Render, validate and list images
+        run: |
+          set -euo pipefail
+          crds='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+          for chart in ${{ steps.list.outputs.charts }}; do
+            # A fresh checkout has no built dependencies, and without them `helm template`
+            # fails on a common.* include, which looks like a chart bug and is not one.
+            helm dependency update "$chart"
+            case "$chart" in
+              */cp-schema-registry)
+                args=(-f "$chart/ci/metrics-values.yaml" -f "$chart/ci/ingress-pdb-values.yaml") ;;
+              */mongodb-sharded)
+                args=(--set metrics.enabled=true --set volumePermissions.enabled=true) ;;
+              *)
+                args=() ;;
+            esac
+            for kube in 1.22.0 1.31.0; do
+              echo "== $chart @ $kube"
+              helm template ci-test "$chart" "${args[@]}" --kube-version "$kube" \
+                | kubeconform -strict -summary \
+                    -kubernetes-version "$kube" \
+                    -schema-location default \
+                    -schema-location "$crds" \
+                    -ignore-missing-schemas
+            done
+            echo "== $chart images"
+            helm template ci-test "$chart" "${args[@]}" | grep -E '^[[:space:]]+image:' | sort -u
+          done
+
+  helm4:
+    name: helm 4 render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.2.2
+      # Helm 4 uses server-side apply on install, which this job does not exercise —
+      # it only proves the charts still lint and render under the v4 client, since
+      # v3 is what the ct jobs run.
+      - name: Lint, render and unit test with Helm 4
+        run: |
+          set -euo pipefail
+          helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false
+          for chart in $(find charts -mindepth 1 -maxdepth 1 -type d ! -name common); do
+            helm dependency update "$chart" >/dev/null
+            helm lint "$chart"
+            helm template ci-test "$chart" >/dev/null
+            if [ -d "$chart/tests" ]; then helm unittest "$chart"; fi
+          done
+
+  install:
+    name: install on kind (k8s ${{ matrix.k8s }})
+    runs-on: ubuntu-latest
+    needs: static
+    if: needs.static.outputs.changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The declared floor. kindest/node images this old need a kind release
+          # from the same era; if this entry stops booting on the runner image,
+          # drop it and let the 1.22 kubeconform pass in `static` carry the floor.
+          - k8s: v1.22.17
+            kind: v0.20.0
+          - k8s: v1.31.6
+            kind: v0.27.0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - uses: helm/chart-testing-action@v2.7.0
+
+      - uses: helm/kind-action@v1
+        with:
+          version: ${{ matrix.kind }}
+          node_image: kindest/node:${{ matrix.k8s }}
+          cluster_name: ct
+
+      # cp-schema-registry cannot start without a Kafka to hold the _schemas topic,
+      # so the install test needs one before it means anything.
+      - name: Deploy the Kafka fixture
+        run: |
+          kubectl apply -f .github/ci/kafka.yaml
+          kubectl -n kafka rollout status deployment/kafka --timeout=300s
+
+      # Installs each ci/*-values.yaml, waits for readiness, then runs `helm test`.
+      - name: ct install
+        run: ct install --config ct.yaml --charts charts/cp-schema-registry
