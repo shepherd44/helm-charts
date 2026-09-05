@@ -64,12 +64,19 @@ pulled. Never repackage an existing version with different content — bump the 
 Deleting a published `.tgz` is only acceptable for a release that was live briefly and
 is superseded, and it needs saying out loud in the commit.
 
-**Regenerate the index with `--merge`,** otherwise `created` timestamps for untouched
-charts churn:
+**Regenerate the index with `--merge`, then restore the timestamps** — `--merge` alone
+does not stop `created` churn. It regenerates the entry for every `.tgz` still in `docs/`,
+so Helm 4 rewrites all of them and a one-chart release diffs every chart:
 
 ```shell
+git show HEAD:docs/index.yaml > /tmp/base-index.yaml
 helm repo index docs --url https://shepherd44.github.io/helm-charts/docs --merge docs/index.yaml
+python3 hack/verify-index.py docs --baseline /tmp/base-index.yaml --restore-created
 ```
+
+The same script without `--restore-created` is the check: it fails on a changed digest or
+a changed `created` for an already-published version, and `release-verify.yaml` runs it on
+any PR touching `docs/`.
 
 **Run `helm dependency update` before packaging** any chart with dependencies.
 `charts/mongodb-sharded` depends on `file://../common`, and the built
