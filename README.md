@@ -57,7 +57,13 @@ sources:
 | [`mongodb-sharded`](charts/mongodb-sharded/README.md) | MongoDB 8.0 | fork of `bitnami/mongodb-sharded`, images from [shepherd44/containers](https://github.com/shepherd44/containers) |
 | [`common`](charts/common/README.md) | — | bitnami library chart, dependency of `mongodb-sharded`, not published |
 
-Each chart README has an install section with a values file worth starting from.
+Each chart README has an install section with a values file worth starting from, and a
+`docs/CHANGELOG.md` covering that chart's releases here.
+
+For a forked chart, `docs/` is deliberately not the chart root: `mongodb-sharded` and
+`common` already ship an upstream `CHANGELOG.md` there, vendored with the rest of the
+chart, and overwriting it would lose bitnami's history and create a merge conflict on the
+next re-vendor. Ours lives alongside it rather than on top of it.
 
 ### mongodb-sharded: which MongoDB series
 

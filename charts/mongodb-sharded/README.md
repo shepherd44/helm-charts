@@ -32,6 +32,9 @@
 >
 > No `bitnamilegacy` images remain.
 >
+> [docs/CHANGELOG.md](docs/CHANGELOG.md) records this fork's releases. The `CHANGELOG.md`
+> at the chart root is bitnami's, vendored with the rest of the chart.
+>
 > Everything below is upstream documentation and still refers to Bitnami.
 
 # MongoDB&reg; Sharded packaged by Bitnami
