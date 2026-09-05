@@ -5,10 +5,7 @@ kind: Ingress
 metadata:
   name: {{ $v.ingress.name | default (include "cp-schema-registry.fullname" .) }}
   labels:
-{{ include "cp-schema-registry.labels" . | indent 4 }}
-  {{- with $v.ingress.labels }}
-{{ toYaml . | indent 4 }}
-  {{- end }}
+{{ include "cp-schema-registry.mergedLabels" (list . $v.ingress.labels) | indent 4 }}
   {{- with $v.ingress.annotations }}
   annotations:
 {{ toYaml . | indent 4 }}

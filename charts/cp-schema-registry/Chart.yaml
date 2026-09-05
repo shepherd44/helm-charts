@@ -10,7 +10,7 @@ type: application
 ## The -0 suffix makes pre-release cluster versions such as 1.22.0-alpha.3 compare
 ## correctly instead of sorting below 1.22.0.
 kubeVersion: ">=1.22.0-0"
-version: 1.0.0
+version: 1.1.0
 appVersion: "7.9.9"
 keywords:
   - kafka
@@ -44,11 +44,9 @@ annotations:
     - name: Schema Registry version reference
       url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-schema-registry/docs/schema-registry-versions.md
   artifacthub.io/changes: |
-    - kind: changed
-      description: "BREAKING: values are flat; the schema_registry block still works but is deprecated"
-    - kind: changed
-      description: image is a map (image.repository, image.tag, image.pullPolicy) and servicePort is service.port
-    - kind: changed
-      description: prometheus.jmx is metrics, and the pod-level securityContext is podSecurityContext
-    - kind: deprecated
-      description: the schema_registry block, mapped onto the new keys and warned about at install time
+    - kind: added
+      description: ServiceMonitor, PodMonitor and PrometheusRule for the Prometheus Operator
+    - kind: added
+      description: values.schema.json, so a mistyped key fails the install instead of rendering defaults
+    - kind: fixed
+      description: caller-supplied labels are merged rather than appended, which emitted a duplicate release key

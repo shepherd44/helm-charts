@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "cp-schema-registry values",
+  "description": "Checked by Helm on install, upgrade, lint and template. Deliberately permissive at the top level: unknown keys are allowed, because a chart that rejects them breaks anyone carrying extra values through a wrapper. It is strict inside the small maps the chart fully owns, which is where typos actually happen -- image.repo instead of image.repository used to install the defaults and exit zero.",
+  "type": "object",
+  "properties": {
+    "replicaCount": { "type": "integer", "minimum": 0 },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "minLength": 1 },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] },
+        "pullSecrets": { "type": ["array", "null"], "items": { "type": "object" } }
+      }
+    },
+    "leaderEligibility": { "type": "boolean" },
+    "configurationOverrides": { "type": ["object", "null"] },
+    "customEnv": { "type": ["object", "null"] },
+    "schemaRegistryOpts": { "type": "string" },
+    "heapOptions": { "type": "string" },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "port": { "type": "integer", "minimum": 1, "maximum": 65535 } }
+    },
+    "kafka": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "bootstrapServers": { "type": "string" } }
+    },
+    "livenessProbe": { "type": ["object", "null"] },
+    "readinessProbe": { "type": ["object", "null"] },
+    "resources": { "type": ["object", "null"] },
+    "podAnnotations": { "type": ["object", "null"] },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "create": { "type": "boolean" },
+        "name": { "type": "string" },
+        "annotations": { "type": ["object", "null"] },
+        "labels": { "type": ["object", "null"] },
+        "automountServiceAccountToken": { "type": "boolean" }
+      }
+    },
+    "envFrom": { "type": ["array", "null"], "items": { "type": "object" } },
+    "extraVolumes": { "type": ["array", "null"], "items": { "type": "object" } },
+    "extraVolumeMounts": { "type": ["array", "null"], "items": { "type": "object" } },
+    "initContainers": { "type": ["array", "null"], "items": { "type": "object" } },
+    "extraContainers": { "type": ["array", "null"], "items": { "type": "object" } },
+    "priorityClassName": { "type": "string" },
+    "terminationGracePeriodSeconds": { "type": ["integer", "null"], "minimum": 0 },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "name": { "type": "string" },
+        "className": { "type": "string" },
+        "labels": { "type": ["object", "null"] },
+        "annotations": { "type": ["object", "null"] },
+        "hosts": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "object",
+            "required": ["host"],
+            "properties": {
+              "host": { "type": "string", "minLength": 1 },
+              "paths": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "object",
+                  "required": ["path"],
+                  "properties": {
+                    "path": { "type": "string" },
+                    "pathType": { "type": "string", "enum": ["Prefix", "Exact", "ImplementationSpecific"] }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tls": { "type": ["array", "null"], "items": { "type": "object" } }
+      }
+    },
+    "nodeSelector": { "type": ["object", "null"] },
+    "tolerations": { "type": ["array", "null"], "items": { "type": "object" } },
+    "affinity": { "type": ["object", "null"] },
+    "podSecurityContext": { "type": ["object", "null"] },
+    "containerSecurityContext": { "type": ["object", "null"] },
+    "podDisruptionBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minAvailable": { "type": ["integer", "string"] },
+        "maxUnavailable": { "type": ["integer", "string"] }
+      }
+    },
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "tag": { "type": "string", "minLength": 1 },
+            "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] },
+            "pullSecrets": { "type": ["array", "null"], "items": { "type": "object" } }
+          }
+        },
+        "resources": { "type": ["object", "null"] },
+        "securityContext": { "type": ["object", "null"] }
+      }
+    },
+    "jmx": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "port": { "type": ["integer", "null"], "minimum": 1, "maximum": 65535 } }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "tag": { "type": "string", "minLength": 1 },
+            "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+          }
+        },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "resources": { "type": ["object", "null"] },
+        "securityContext": { "type": ["object", "null"] },
+        "scrapeAnnotations": { "type": "boolean" },
+        "serviceMonitor": { "$ref": "#/definitions/monitor" },
+        "podMonitor": { "$ref": "#/definitions/monitor" },
+        "prometheusRule": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "namespace": { "type": "string" },
+            "labels": { "type": ["object", "null"] },
+            "annotations": { "type": ["object", "null"] },
+            "rules": { "type": ["array", "null"], "items": { "type": "object" } }
+          }
+        }
+      }
+    },
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "overrideGroupId": { "type": "string" },
+    "schema_registry": {
+      "type": ["object", "null"],
+      "description": "Deprecated pre-1.0.0 layout. Unconstrained on purpose: it is mapped onto the keys above, and the mapping -- not this schema -- is what decides whether a key is understood."
+    }
+  },
+  "definitions": {
+    "monitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "namespace": { "type": "string" },
+        "labels": { "type": ["object", "null"] },
+        "annotations": { "type": ["object", "null"] },
+        "jobLabel": { "type": "string" },
+        "interval": { "type": "string" },
+        "scrapeTimeout": { "type": "string" },
+        "path": { "type": "string" },
+        "scheme": { "type": "string", "enum": ["http", "https"] },
+        "honorLabels": { "type": "boolean" },
+        "selector": { "type": ["object", "null"] },
+        "relabelings": { "type": ["array", "null"], "items": { "type": "object" } },
+        "metricRelabelings": { "type": ["array", "null"], "items": { "type": "object" } }
+      }
+    }
+  }
+}

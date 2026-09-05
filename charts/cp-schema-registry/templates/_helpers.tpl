@@ -1,5 +1,25 @@
 {{/* vim: set filetype=mustache: */}}
 {{/*
+The name of the exporter port. The Service, the container port and the monitors all
+reference it, so it lives here rather than being spelled out three times.
+*/}}
+{{- define "cp-schema-registry.metricsPortName" -}}metrics{{- end -}}
+
+{{/*
+Refuses combinations that would render something that quietly does nothing.
+*/}}
+{{- define "cp-schema-registry.validateMetrics" -}}
+{{- $v := include "cp-schema-registry.values" . | fromYaml -}}
+{{- $m := $v.metrics -}}
+{{- if and $m.serviceMonitor.enabled $m.podMonitor.enabled -}}
+{{- fail "metrics.serviceMonitor.enabled and metrics.podMonitor.enabled are mutually exclusive: both scrape the same exporter, under two job names." -}}
+{{- end -}}
+{{- if and (or $m.serviceMonitor.enabled $m.podMonitor.enabled) (not $m.enabled) -}}
+{{- fail "metrics.serviceMonitor/podMonitor need metrics.enabled: without the exporter sidecar there is nothing listening on the port they point at." -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Effective values.
 
 1.0.0 flattened the layout: everything used to live under `schema_registry`. That block
@@ -160,6 +180,27 @@ app.kubernetes.io/component: schema-registry
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end -}}
 
+
+{{/*
+Object labels plus caller-supplied ones, merged rather than concatenated.
+
+Appending a second block of labels emits a duplicate YAML key whenever the two sets
+overlap, and they do: `release` is one of the chart's own labels and is exactly what
+kube-prometheus-stack asks a ServiceMonitor to carry. kubectl rejects the result with
+"mapping key already defined". Caller labels win.
+
+    {{ include "cp-schema-registry.mergedLabels" (list . $extraLabels) | indent 4 }}
+*/}}
+{{- define "cp-schema-registry.mergedLabels" -}}
+{{- $ctx := index . 0 -}}
+{{- $extra := (index . 1) | default dict -}}
+{{- $merged := merge (deepCopy $extra) (fromYaml (include "cp-schema-registry.labels" $ctx)) -}}
+{{/* Every value goes through toString first: a label value is a string, and an
+     appVersion like 8.0 would otherwise render as a number the API server refuses. */}}
+{{- $out := dict -}}
+{{- range $k, $val := $merged }}{{- $_ := set $out $k (toString $val) -}}{{- end -}}
+{{- toYaml $out -}}
+{{- end -}}
 
 {{/*
 Schema Registry config that ends up as SCHEMA_REGISTRY_* env.
