@@ -119,6 +119,18 @@ helm install my-schema-registry shepherd44/cp-schema-registry \
   --set kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
+Or straight from the registry, no `helm repo add`:
+
+```console
+helm install my-schema-registry oci://ghcr.io/shepherd44/charts/cp-schema-registry \
+  --version 1.2.0 \
+  --set kafka.bootstrapServers=PLAINTEXT://my-kafka-headless:9092
+```
+
+Same chart either way. The registry copy is signed — see
+[Releases](../../README.md#from-the-registry-instead) for the `cosign verify` command.
+
+
 `kafka.bootstrapServers` is the one value with no usable default. Point
 it at an existing Kafka; this chart does not bring one.
 

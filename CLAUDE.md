@@ -94,6 +94,11 @@ those are the only places it exists, so update both.
 
 **Tag every release** as `<chart>-<version>`, annotated. See README "Release".
 
+**The tag is also the trigger.** Pushing it runs `release-oci.yaml`, which pushes the
+chart to `ghcr.io/shepherd44/charts` as a cosign-signed OCI artifact. It writes nothing
+back to the repo, and it fails if the tag version and `Chart.yaml` disagree — so tag only
+after `docs/` is merged, and never move a release tag.
+
 ## Traps
 
 **`annotations.images` in `Chart.yaml` is a gate, not documentation.** The bundled
