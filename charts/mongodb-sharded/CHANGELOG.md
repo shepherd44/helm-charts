@@ -9,6 +9,27 @@ not the same chart as the version carrying that number upstream.
 
 Each release is tagged in git as `mongodb-sharded-<version>`.
 
+## 9.4.18
+
+No change to what the chart renders. This adds the checks the repo's other chart
+already had, so a re-vendor of upstream cannot quietly undo this fork:
+
+- **Template unit tests** (`tests/`). They pin the substituted images — the fork's
+  `mongodb-sharded`, `os-shell` and `mongodb-exporter` — and assert that no
+  `bitnami/` or `bitnamilegacy/` image reaches a rendered manifest. That last one is
+  the reason this fork exists, and it is exactly what a careless re-vendor brings back.
+- **`ci/minimal-values.yaml`**, so `ct install` brings the chart up on a KinD cluster
+  instead of CI proving only that the YAML parses. One shard, no persistence: the
+  point is that the objects come up and find each other, not that the data survives.
+- **An image annotation check** (`hack/check-image-annotations.py`, wired into CI).
+  `annotations.images` is a gate rather than documentation — the bundled `common`
+  library compares it against every rendered image — so CI now fails when the list and
+  the render disagree, in either direction.
+
+No `values.schema.json`, deliberately. Hand-writing one for a 1949-line upstream
+values file means re-deriving it at every re-vendor, in exchange for typo-catching
+that lint, render and install largely already do.
+
 ## 9.4.17
 
 - `volumePermissions.image`: `bitnamilegacy/os-shell:12-debian-12-r51` →

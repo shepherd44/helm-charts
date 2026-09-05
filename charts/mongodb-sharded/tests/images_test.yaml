@@ -1,0 +1,47 @@
+suite: fork images
+release:
+  name: t
+templates:
+  - templates/mongos/mongos-dep-sts.yaml
+  - templates/config-server/config-server-statefulset.yaml
+  - templates/shard/shard-data-statefulset.yaml
+tests:
+  # One assertion, three templates: mongos, config server and shard data all run the
+  # same image, so the same path holds in all of them.
+  - it: runs the fork's own image wherever it runs mongod or mongos
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: docker.io/shepherd9664/mongodb-sharded:8.0.30-debian-12-latest
+
+  - it: uses the fork's os-shell for volume permissions
+    templates:
+      - templates/config-server/config-server-statefulset.yaml
+      - templates/shard/shard-data-statefulset.yaml
+    set:
+      volumePermissions.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: docker.io/shepherd9664/os-shell:12-debian-12-latest
+
+  - it: uses the fork's exporter for metrics
+    templates:
+      - templates/mongos/mongos-dep-sts.yaml
+    set:
+      metrics.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[1].image
+          value: docker.io/shepherd9664/mongodb-exporter:0.53.0-debian-12-latest
+
+  # The reason this fork exists: bitnami stopped publishing its public catalog, so a
+  # bitnami/ or bitnamilegacy/ image reaching a rendered manifest means a re-vendor
+  # brought upstream defaults back with it.
+  - it: renders no bitnami image at all
+    set:
+      metrics.enabled: true
+      volumePermissions.enabled: true
+    asserts:
+      - notMatchRegexRaw:
+          pattern: 'docker\.io/bitnami(legacy)?/'

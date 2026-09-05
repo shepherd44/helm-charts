@@ -115,6 +115,9 @@ jobs:
             done
             echo "== $chart images"
             helm template ci-test "$chart" "${args[@]}" | grep -E '^[[:space:]]+image:' | sort -u
+            # annotations.images is a gate, not documentation: the bundled common
+            # library compares it against every rendered image. Fail when it drifts.
+            python3 hack/check-image-annotations.py "$chart" "${args[@]}"
           done
 
   helm4:
@@ -183,5 +186,7 @@ jobs:
           kubectl -n kafka rollout status deployment/kafka --timeout=300s
 
       # Installs each ci/*-values.yaml, waits for readiness, then runs `helm test`.
+      # mongodb-sharded installs a one-shard, no-persistence topology; the default two
+      # shards would double the pods for no extra coverage.
       - name: ct install
-        run: ct install --config ct.yaml --charts charts/cp-schema-registry
+        run: ct install --config ct.yaml --charts charts/cp-schema-registry,charts/mongodb-sharded
