@@ -4,6 +4,52 @@ entries:
   - annotations:
       artifacthub.io/changes: |
         - kind: added
+          description: topologySpreadConstraints pass-through
+        - kind: added
+          description: optional NetworkPolicy, ingress by default and egress opt-in
+        - kind: added
+          description: "metrics.mode: native runs the exporter as a Kubernetes sidecar container (needs k8s 1.29+)"
+        - kind: added
+          description: a Kubernetes version table in the README, saying what to use below 1.29 and 1.30
+      artifacthub.io/images: |
+        - name: cp-schema-registry
+          image: confluentinc/cp-schema-registry:7.9.9
+        - name: jmx-exporter
+          image: shepherd9664/jmx-exporter:1.6.0-latest
+        - name: test-connection
+          image: curlimages/curl:8.11.1
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart source
+          url: https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+        - name: Changelog
+          url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-schema-registry/CHANGELOG.md
+        - name: Schema Registry version reference
+          url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-schema-registry/docs/schema-registry-versions.md
+    apiVersion: v2
+    appVersion: 7.9.9
+    created: "2026-09-05T13:46:00.561102+09:00"
+    description: A Helm chart for Confluent Schema Registry on Kubernetes
+    digest: deeb4237e5f2cff195c2c0fc9141d72a8fc3e1d8a81739f70da92e7d0e3a4b2a
+    home: https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+    keywords:
+    - kafka
+    - schema-registry
+    - confluent
+    kubeVersion: '>=1.22.0-0'
+    maintainers:
+    - name: shepherd44
+      url: https://github.com/shepherd44
+    name: cp-schema-registry
+    sources:
+    - https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+    type: application
+    urls:
+    - https://shepherd44.github.io/helm-charts/docs/cp-schema-registry-1.2.0.tgz
+    version: 1.2.0
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
           description: ServiceMonitor, PodMonitor and PrometheusRule for the Prometheus Operator
         - kind: added
           description: values.schema.json, so a mistyped key fails the install instead of rendering defaults
@@ -254,4 +300,4 @@ entries:
     urls:
     - https://shepherd44.github.io/helm-charts/docs/mongodb-sharded-9.4.17.tgz
     version: 9.4.17
-generated: "2026-09-05T13:18:40.961003+09:00"
+generated: "2026-09-05T13:46:00.552323+09:00"
