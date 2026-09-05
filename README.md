@@ -13,6 +13,20 @@ rather than found by name. Nothing needs to be installed on the cluster to use i
 
 ## Use
 
+Charts are published to GitHub Container Registry, signed. No repo to add:
+
+```shell
+helm install my-release oci://ghcr.io/shepherd44/charts/cp-schema-registry --version 1.3.0
+helm show values oci://ghcr.io/shepherd44/charts/cp-schema-registry --version 1.3.0
+```
+
+### The Pages repo, frozen
+
+The static repo below still serves everything published up to and including
+`cp-schema-registry` 1.3.0 and `mongodb-sharded` 9.4.17. Nothing new is added to it —
+those files stay so that pinned installs keep resolving, and new versions go to the
+registry only.
+
 ```shell
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
@@ -38,49 +52,45 @@ helm uninstall my-release
 
 Each chart's own README documents its values and a working install for that chart.
 
-### From the registry instead
+### Moving a release off the Pages repo
 
-Releases from 1.2.0 on are also pushed to GitHub Container Registry, so the chart can be
-installed without adding a repo at all:
+Helm, in place:
 
 ```shell
-helm install my-release oci://ghcr.io/shepherd44/charts/cp-schema-registry --version 1.2.0
+helm upgrade my-release oci://ghcr.io/shepherd44/charts/cp-schema-registry \
+  --version 1.3.0 --reuse-values
 ```
 
-Same chart, same bytes: the workflow pushes the very `.tgz` that is committed in `docs/`
-rather than building the chart again, because `helm package` embeds a timestamp and would
-otherwise produce a different sha256 for identical content. So the two channels can be
-compared, not just claimed to match:
+Argo CD — the `chart` and values stay as they are, only the source changes:
 
-```shell
-sha256sum cp-schema-registry-1.2.0.tgz        # pulled from the Pages repo
-crane manifest ghcr.io/shepherd44/charts/cp-schema-registry:1.2.0 | jq -r '.layers[0].digest'
+```yaml
+sources:
+  - repoURL: ghcr.io/shepherd44/charts    # was https://shepherd44.github.io/helm-charts/docs
+    chart: cp-schema-registry
+    targetRevision: 1.3.0
+    helm:
+      releaseName: cp-schema-registry
+      valueFiles: [...]
 ```
 
-Registry artifacts are content-addressed, so a published digest cannot be repackaged, and
-each one is signed with keyless cosign:
+Argo CD needs the repository registered as a Helm repo of type OCI; on versions before
+3.0 that is the `enableOCI: true` flag on the repository entry. The registry is public,
+so no credentials.
+
+### Verifying a chart
+
+Every release in the registry is signed with keyless cosign — the signing identity is
+this repo's release workflow, recorded in Sigstore's public transparency log, so there is
+no key to fetch:
 
 ```shell
-cosign verify ghcr.io/shepherd44/charts/cp-schema-registry:1.2.0 \
+cosign verify ghcr.io/shepherd44/charts/cp-schema-registry:1.3.0 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github.com/shepherd44/helm-charts/'
 ```
 
-There is no public key to fetch: the signing identity is the release workflow itself,
-recorded in Sigstore's public transparency log. A `.tgz` taken from the Pages repo is the
-same file, but verify it through the registry — that is where the signature lives.
-
-
-Using it from Argo CD — the repo is a Helm source like any other:
-
-```yaml
-sources:
-  - repoURL: https://shepherd44.github.io/helm-charts/docs
-    chart: mongodb-sharded
-    targetRevision: 9.4.17
-    helm:
-      valueFiles: [...]
-```
+Versions that exist in both channels are the same bytes: through 1.3.0 the workflow
+pushed the very `.tgz` committed in `docs/` rather than building the chart again.
 
 ## Charts
 
@@ -182,53 +192,43 @@ are packaged.
 
 ## Release
 
+Publishing is the tag. There is nothing to build by hand and nothing to commit:
+
 ```shell
-CHART=mongodb-sharded
+CHART=cp-schema-registry
 VERSION=$(awk '/^version:/{print $2}' charts/$CHART/Chart.yaml)
 
-# charts with dependencies only
-helm dependency update ./charts/$CHART
-
-helm package ./charts/$CHART --destination docs
-
-git show HEAD:docs/index.yaml > /tmp/base-index.yaml
-helm repo index docs --url https://shepherd44.github.io/helm-charts/docs --merge docs/index.yaml
-python3 hack/verify-index.py docs --baseline /tmp/base-index.yaml --restore-created
-```
-
-`--merge` alone is no longer enough. It regenerates the entry for every `.tgz` still
-sitting in `docs/`, so under Helm 4 a one-chart release rewrites the `created` timestamp
-of every published version and the diff touches every chart. `--restore-created` puts
-them back, editing the file as text so quoting and block scalars survive, and the same
-script then re-verifies. CI fails the PR if any of them drifted.
-
-A published `.tgz` is immutable: to change a chart, bump its version rather than
-repackaging one that is already live.
-
-Then commit `docs/` and push to `main`. GitHub Pages serves the repo root of `main`,
-so `docs/index.yaml` is live once the Pages build finishes.
-
-Tag the release commit:
-
-```shell
 git tag -a $CHART-$VERSION -m "..."
 git push origin $CHART-$VERSION
 ```
 
-Tags are `<chart>-<version>` because this repo holds more than one chart. The tag
-message records what the release is; for a forked chart it also records the upstream
-version and commit it was based on, and the local changes applied on top.
+That fires `release-oci.yaml`, which packages the chart from the tag, pushes it to
+`ghcr.io/shepherd44/charts`, signs it with keyless cosign and verifies its own output.
+It refuses a tag whose version does not match the chart's `Chart.yaml`, so a mistyped tag
+fails instead of publishing something surprising.
 
-Pushing that tag fires `release-oci.yaml`, which packages the same chart again and pushes
-it to `ghcr.io/shepherd44/charts` as an OCI artifact, signed with keyless cosign. It
-publishes nothing into `docs/` and touches no commit — the static repo above stays the
-primary channel, and the registry is a second way to get the identical chart.
-
-The workflow refuses a tag whose version does not match the chart's `Chart.yaml`, so a
-mistyped tag fails instead of publishing something surprising.
+Tags are `<chart>-<version>` because this repo holds more than one chart. The tag message
+records what the release is; for a forked chart it also records the upstream version and
+commit it was based on, and the local changes applied on top.
 
 A package pushed to ghcr.io for the first time is **private**. Make it public once, under
-the org's Packages settings, or `helm pull oci://...` fails with a 401 for everyone else.
+the account's Packages settings, or `helm pull oci://...` fails with a 401 for everyone
+else.
+
+### docs/ is frozen
+
+It holds real artifacts people have pulled, so it stays exactly as it is. `helm repo
+index` is not run any more and no `.tgz` is added or changed. `release-verify.yaml` still
+runs on any change under `docs/` and fails if a published digest or `created` timestamp
+moves — which now means it guards against edits rather than checking a release.
+
+Republishing an old version from that repo is what `hack/verify-index.py` prevents; run
+it locally the same way CI does:
+
+```shell
+git show origin/main:docs/index.yaml > /tmp/base-index.yaml
+python3 hack/verify-index.py docs --baseline /tmp/base-index.yaml
+```
 
 ## Versioning a forked chart
 

@@ -64,9 +64,16 @@ pulled. Never repackage an existing version with different content — bump the 
 Deleting a published `.tgz` is only acceptable for a release that was live briefly and
 is superseded, and it needs saying out loud in the commit.
 
-**Regenerate the index with `--merge`, then restore the timestamps** — `--merge` alone
-does not stop `created` churn. It regenerates the entry for every `.tgz` still in `docs/`,
-so Helm 4 rewrites all of them and a one-chart release diffs every chart:
+**`docs/` is frozen.** It stops at `cp-schema-registry` 1.3.0 and `mongodb-sharded`
+9.4.17. Charts are published to `ghcr.io/shepherd44/charts` now; nothing new is added to
+`docs/` and `helm repo index` is not run any more. The files stay so pinned installs keep
+resolving. `release-verify.yaml` still runs on any change under `docs/`, which now means
+it guards the frozen files rather than checking a release.
+
+**Do not regenerate the index.** `docs/index.yaml` is frozen with the rest of that
+directory. If it ever has to be rebuilt, `--merge` alone does not stop `created` churn —
+it regenerates the entry for every `.tgz` still there — so the restore step is not
+optional:
 
 ```shell
 git show HEAD:docs/index.yaml > /tmp/base-index.yaml
@@ -78,7 +85,8 @@ The same script without `--restore-created` is the check: it fails on a changed 
 a changed `created` for an already-published version, and `release-verify.yaml` runs it on
 any PR touching `docs/`.
 
-**Run `helm dependency update` before packaging** any chart with dependencies.
+**Run `helm dependency update` before packaging** any chart with dependencies. The
+release workflow does this itself; it matters for local `helm package` and lint.
 `charts/mongodb-sharded` depends on `file://../common`, and the built
 `charts/mongodb-sharded/charts/common-*.tgz` is gitignored but must exist at package
 time or `common` silently drops out of the tarball.
@@ -92,12 +100,15 @@ number in our line; never republish under upstream's own number. The base is rec
 in the release tag message and in the fork notice at the top of the chart's README —
 those are the only places it exists, so update both.
 
-**Tag every release** as `<chart>-<version>`, annotated. See README "Release".
+**The tag is the release.** Pushing `<chart>-<version>`, annotated, runs
+`release-oci.yaml`: it packages the chart from the tag, pushes it to
+`ghcr.io/shepherd44/charts` and signs it with keyless cosign. Nothing is committed, and
+there is no packaging step to do by hand. It fails if the tag version and `Chart.yaml`
+disagree. Never move a release tag — the artifact it produced is immutable.
 
-**The tag is also the trigger.** Pushing it runs `release-oci.yaml`, which pushes the
-chart to `ghcr.io/shepherd44/charts` as a cosign-signed OCI artifact. It writes nothing
-back to the repo, and it fails if the tag version and `Chart.yaml` disagree — so tag only
-after `docs/` is merged, and never move a release tag.
+A version that still exists in `docs/` is pushed from that file rather than rebuilt:
+`helm package` embeds a timestamp, so rebuilding would change the digest of something
+already published.
 
 ## Traps
 
