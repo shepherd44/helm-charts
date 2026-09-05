@@ -97,6 +97,7 @@ pushed the very `.tgz` committed in `docs/` rather than building the chart again
 | chart | app | install notes |
 |---|---|---|
 | [`cp-schema-registry`](charts/cp-schema-registry/README.md) | Confluent Schema Registry 7.9 | needs an existing Kafka; the upstream confluent chart is gone, this is the only copy |
+| [`cp-ksql-server`](charts/cp-ksql-server/README.md) | Confluent ksqlDB 7.9 | needs an existing Kafka; vendored from the same deleted confluent repo, **not published yet** |
 | [`mongodb-sharded`](charts/mongodb-sharded/README.md) | MongoDB 8.0 | fork of `bitnami/mongodb-sharded`, images from [shepherd44/containers](https://github.com/shepherd44/containers) |
 | [`common`](charts/common/README.md) | — | bitnami library chart, dependency of `mongodb-sharded`, not published |
 
@@ -254,10 +255,10 @@ base, and publish as the next number in our line.
 Every chart here is a fork, and all of them are Apache-2.0.
 
 `mongodb-sharded` and `common` come from
-[bitnami/charts](https://github.com/bitnami/charts). `cp-schema-registry` comes from
-`confluentinc/cp-helm-charts`, a repository since deleted from GitHub; its `LICENSE` is
-kept in the chart directory, recovered verbatim from a surviving fork, because upstream
-shipped no per-chart copy.
+[bitnami/charts](https://github.com/bitnami/charts). `cp-schema-registry` and
+`cp-ksql-server` both come from `confluentinc/cp-helm-charts`, a repository since deleted
+from GitHub; its `LICENSE` is kept in each chart directory, recovered verbatim from a
+surviving fork, because upstream shipped no per-chart copy.
 
 Each chart directory keeps upstream's license file, and the fork notice at the top of the
 chart's README records the base version, the base commit, and every local change — which
