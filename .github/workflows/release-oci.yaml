@@ -70,9 +70,16 @@ jobs:
         run: |
           helm registry login ghcr.io -u '${{ github.actor }}' -p '${{ secrets.GITHUB_TOKEN }}'
           repo="ghcr.io/$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')/charts"
+          # helm push prints Pushed:/Digest: on stderr, not stdout, so the
+          # redirect is load-bearing: without it the log is empty and the digest
+          # comes out blank.
           helm push "/tmp/pkg/${{ steps.tag.outputs.chart }}-${{ steps.tag.outputs.version }}.tgz" \
-            "oci://$repo" | tee /tmp/push.log
+            "oci://$repo" 2>&1 | tee /tmp/push.log
           digest=$(awk '/^Digest: /{print $2}' /tmp/push.log)
+          if [ -z "$digest" ]; then
+            echo "helm push reported no digest; refusing to sign a guessed reference" >&2
+            exit 1
+          fi
           echo "ref=$repo/${{ steps.tag.outputs.chart }}@$digest" >> "$GITHUB_OUTPUT"
 
       # Signs the artifact by digest, not by tag: a tag can be moved, a digest
