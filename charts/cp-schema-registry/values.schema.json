@@ -4,6 +4,18 @@
   "description": "Checked by Helm on install, upgrade, lint and template. Deliberately permissive at the top level: unknown keys are allowed, because a chart that rejects them breaks anyone carrying extra values through a wrapper. It is strict inside the small maps the chart fully owns, which is where typos actually happen -- image.repo instead of image.repository used to install the defaults and exit zero.",
   "type": "object",
   "properties": {
+    "commonLabels": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "commonAnnotations": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
     "replicaCount": {
       "type": "integer",
       "minimum": 0
@@ -68,6 +80,18 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 65535
+        },
+        "labels": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "annotations": {
+          "type": [
+            "object",
+            "null"
+          ]
         }
       }
     },
@@ -103,6 +127,30 @@
         "object",
         "null"
       ]
+    },
+    "podLabels": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "labels": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "annotations": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
     },
     "serviceAccount": {
       "type": "object",
@@ -368,6 +416,18 @@
           "type": [
             "integer",
             "string"
+          ]
+        },
+        "labels": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "annotations": {
+          "type": [
+            "object",
+            "null"
           ]
         }
       }

@@ -6,9 +6,9 @@ metadata:
   name: {{ $v.ingress.name | default (include "cp-schema-registry.fullname" .) }}
   labels:
 {{ include "cp-schema-registry.mergedLabels" (list . $v.ingress.labels) | indent 4 }}
-  {{- with $v.ingress.annotations }}
+  {{- with (include "cp-schema-registry.mergedAnnotations" (list . $v.ingress.annotations)) }}
   annotations:
-{{ toYaml . | indent 4 }}
+{{ . | indent 4 }}
   {{- end }}
 spec:
   {{- with $v.ingress.className }}

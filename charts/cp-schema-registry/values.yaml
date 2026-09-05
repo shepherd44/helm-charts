@@ -4,6 +4,17 @@
 # shape still works, in full, and is documented at the bottom of this file — but it is
 # deprecated and the chart warns about it at install time.
 
+## Labels and annotations added to every object this chart renders — Deployment,
+## Service, ServiceAccount, ConfigMap, PodDisruptionBudget, Ingress, HTTPRoute, the
+## monitors, and the `helm test` pod.
+##
+## Per-resource keys below (service.labels, deployment.annotations, ...) are merged on
+## top of these, and win where they overlap. The chart's own labels lose to both, with
+## one exception: the Deployment's spec.selector is immutable, so it keeps only the
+## legacy app/release pair and nothing here reaches it.
+commonLabels: {}
+commonAnnotations: {}
+
 ## Number of Schema Registry pods.
 replicaCount: 1
 
@@ -49,6 +60,8 @@ heapOptions: ""
 service:
   ## The port on which Schema Registry serves its REST API.
   port: 8081
+  labels: {}
+  annotations: {}
 
 ## You can list a load balanced service endpoint, or a list of all brokers (which is
 ## hard in Kubernetes). e.g.:
@@ -90,7 +103,13 @@ resources: {}
   #  cpu: 100m
   #  memory: 128Mi
 
-## Custom pod annotations.
+## Metadata for the Deployment object itself.
+deployment:
+  labels: {}
+  annotations: {}
+
+## Metadata for the pods. podAnnotations predates the rest and is kept.
+podLabels: {}
 podAnnotations: {}
 
 ## ServiceAccount for the pods.
@@ -277,6 +296,8 @@ podDisruptionBudget:
   enabled: false
   minAvailable: 1
   maxUnavailable: ""
+  labels: {}
+  annotations: {}
 
 ## `helm test` hook. Runs only on `helm test`, never on install or upgrade.
 ## The image needs nothing but curl; the entrypoint is already curl, so the

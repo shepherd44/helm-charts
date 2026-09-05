@@ -9,6 +9,29 @@ no upstream changelog to keep alongside this one.
 
 Each release is tagged in git as `cp-schema-registry-<version>`.
 
+## 1.4.0
+
+- **`commonLabels` and `commonAnnotations`**, applied to every object the chart renders
+  — Deployment, Service, ServiceAccount, ConfigMap, PodDisruptionBudget, Ingress,
+  HTTPRoute, the monitors, and the `helm test` pod.
+- **Per-resource metadata** on the objects that had none: `deployment.labels` and
+  `.annotations`, `podLabels` (`podAnnotations` already existed), `service.labels` and
+  `.annotations`, `podDisruptionBudget.labels` and `.annotations`. The ServiceAccount,
+  Ingress, HTTPRoute and monitors already took their own and now merge the common ones
+  underneath.
+
+  Precedence, lowest first: the chart's own labels, then `commonLabels`, then the
+  per-resource key. Same for annotations, minus the chart's own.
+
+  **The Deployment's `spec.selector` is untouched by all of it.** A selector is
+  immutable, so it keeps only the legacy `app`/`release` pair — adding a label there
+  would break `helm upgrade` on every existing release.
+
+Rendered output with default values is unchanged apart from label ordering: objects that
+now go through the merge helper emit their labels alphabetically, and
+`app.kubernetes.io/version` loses its quotes where the value does not need them. Same
+labels, same values.
+
 ## 1.3.0
 
 - **`httpRoute`.** An `HTTPRoute` for clusters running a Gateway API controller, off by

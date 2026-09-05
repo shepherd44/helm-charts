@@ -4,7 +4,11 @@ kind: Service
 metadata:
   name: {{ template "cp-schema-registry.fullname" . }}
   labels:
-{{ include "cp-schema-registry.labels" . | indent 4 }}
+{{ include "cp-schema-registry.mergedLabels" (list . $v.service.labels) | indent 4 }}
+  {{- with (include "cp-schema-registry.mergedAnnotations" (list . $v.service.annotations)) }}
+  annotations:
+{{ . | indent 4 }}
+  {{- end }}
 spec:
   ports:
     - name: schema-registry

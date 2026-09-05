@@ -5,8 +5,11 @@ kind: Pod
 metadata:
   name: {{ template "cp-schema-registry.fullname" . }}-test-connection
   labels:
-{{ include "cp-schema-registry.labels" . | indent 4 }}
+{{ include "cp-schema-registry.mergedLabels" (list . dict) | indent 4 }}
   annotations:
+  {{- with (include "cp-schema-registry.mergedAnnotations" (list . dict)) }}
+{{ . | indent 4 }}
+  {{- end }}
     helm.sh/hook: test
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:

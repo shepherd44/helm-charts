@@ -234,13 +234,36 @@ kube-prometheus-stack asks a ServiceMonitor to carry. kubectl rejects the result
 */}}
 {{- define "cp-schema-registry.mergedLabels" -}}
 {{- $ctx := index . 0 -}}
+{{- $v := include "cp-schema-registry.values" $ctx | fromYaml -}}
 {{- $extra := (index . 1) | default dict -}}
-{{- $merged := merge (deepCopy $extra) (fromYaml (include "cp-schema-registry.labels" $ctx)) -}}
+{{/* Precedence, lowest first: the chart's own labels, commonLabels, the caller's. */}}
+{{- $merged := merge (deepCopy $extra) ($v.commonLabels | default dict) (fromYaml (include "cp-schema-registry.labels" $ctx)) -}}
 {{/* Every value goes through toString first: a label value is a string, and an
      appVersion like 8.0 would otherwise render as a number the API server refuses. */}}
 {{- $out := dict -}}
 {{- range $k, $val := $merged }}{{- $_ := set $out $k (toString $val) -}}{{- end -}}
 {{- toYaml $out -}}
+{{- end -}}
+
+{{/*
+commonAnnotations plus the caller's, merged the same way as labels. Renders nothing
+when both are empty, so the caller wraps it:
+
+    {{- with (include "cp-schema-registry.mergedAnnotations" (list . $extra)) }}
+    annotations:
+    {{ . | indent 4 }}
+    {{- end }}
+*/}}
+{{- define "cp-schema-registry.mergedAnnotations" -}}
+{{- $ctx := index . 0 -}}
+{{- $v := include "cp-schema-registry.values" $ctx | fromYaml -}}
+{{- $extra := (index . 1) | default dict -}}
+{{- $merged := merge (deepCopy $extra) ($v.commonAnnotations | default dict) -}}
+{{- if $merged -}}
+{{- $out := dict -}}
+{{- range $k, $val := $merged }}{{- $_ := set $out $k (toString $val) -}}{{- end -}}
+{{- toYaml $out -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

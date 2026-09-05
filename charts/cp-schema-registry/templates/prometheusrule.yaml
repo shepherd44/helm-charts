@@ -11,9 +11,9 @@ metadata:
   namespace: {{ $pr.namespace | default .Release.Namespace }}
   labels:
 {{ include "cp-schema-registry.mergedLabels" (list . $pr.labels) | indent 4 }}
-  {{- with $pr.annotations }}
+  {{- with (include "cp-schema-registry.mergedAnnotations" (list . $pr.annotations)) }}
   annotations:
-{{ toYaml . | indent 4 }}
+{{ . | indent 4 }}
   {{- end }}
 spec:
   groups:
