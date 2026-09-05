@@ -10,7 +10,7 @@ type: application
 ## The -0 suffix makes pre-release cluster versions such as 1.22.0-alpha.3 compare
 ## correctly instead of sorting below 1.22.0.
 kubeVersion: ">=1.22.0-0"
-version: 1.4.0
+version: 1.5.0
 appVersion: "7.9.9"
 keywords:
   - kafka
@@ -44,7 +44,5 @@ annotations:
     - name: Schema Registry version reference
       url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-schema-registry/docs/schema-registry-versions.md
   artifacthub.io/changes: |
-    - kind: added
-      description: commonLabels and commonAnnotations, applied to every object the chart renders
-    - kind: added
-      description: per-resource labels and annotations for the Deployment, pods, Service and PDB
+    - kind: fixed
+      description: "Kubernetes service links are off: their injected variables collide with the image's SCHEMA_REGISTRY_* configuration and crash the container"

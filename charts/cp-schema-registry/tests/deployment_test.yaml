@@ -210,3 +210,21 @@ tests:
       - equal:
           path: spec.template.spec.initContainers[0].name
           value: wait-for-kafka
+
+  # Kubernetes injects <SERVICE>_PORT and friends for every Service in the namespace,
+  # and this image reads SCHEMA_REGISTRY_* as configuration. A Service named
+  # schema-registry therefore lands `port=tcp://10.x.x.x:8081` in the properties and the
+  # container exits 1 on startup. Off by default, and this is what keeps it that way.
+  - it: turns Kubernetes service links off
+    asserts:
+      - equal:
+          path: spec.template.spec.enableServiceLinks
+          value: false
+
+  - it: can be turned back on for someone who wants the variables
+    set:
+      enableServiceLinks: true
+    asserts:
+      - equal:
+          path: spec.template.spec.enableServiceLinks
+          value: true
