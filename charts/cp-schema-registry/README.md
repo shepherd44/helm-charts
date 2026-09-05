@@ -29,7 +29,7 @@ carries its `LICENSE` verbatim, recovered from a surviving fork. Local changes a
 
 | | |
 |---|---|
-| Chart | `1.4.0` |
+| Chart | `1.5.0` |
 | Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
 
 Confluent supports each Community release for two years from its minor release date.
@@ -116,7 +116,7 @@ should follow, and the list is about to grow.
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 1.4.0 \
+  --version 1.5.0 \
   --set kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
@@ -127,7 +127,7 @@ With a values file:
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 1.4.0 -f my-values.yaml
+  --version 1.5.0 -f my-values.yaml
 ```
 
 ```yaml
@@ -443,6 +443,33 @@ keeps only the legacy `app`/`release` pair; a label added there would break
 `helm upgrade` on every existing release. `podLabels` does reach the pod template, which
 is fine — the selector is a subset of it.
 
+## Service links are off
+
+Kubernetes injects an environment variable set for every Service in the namespace when
+`enableServiceLinks` is on, which is the cluster default:
+
+```
+SCHEMA_REGISTRY_SERVICE_HOST=10.100.149.104
+SCHEMA_REGISTRY_PORT=tcp://10.100.149.104:8081
+SCHEMA_REGISTRY_PORT_8081_TCP_ADDR=10.100.149.104
+...
+```
+
+This image reads `SCHEMA_REGISTRY_*` as configuration. So a Service named
+`schema-registry` puts `port=tcp://10.100.149.104:8081` in the properties file and the
+container exits 1 a second after starting, with only this in the log:
+
+```
+PORT is deprecated. Please use SCHEMA_REGISTRY_LISTENERS instead.
+```
+
+The chart sets `enableServiceLinks: false` for that reason. It is not only this chart's
+own Service that can do it — any sibling named `schema-registry*` in the namespace will
+— and the injected set grows with the number of ports, so overriding the variables by
+name does not hold. Schema Registry does not use them; brokers are found over DNS.
+
+Set `enableServiceLinks: true` if something in your pod actually needs the variables.
+
 ## Credentials
 
 `configurationOverrides` renders every value literally into the Deployment:
@@ -702,6 +729,7 @@ carry extra values through wrappers — and strict inside the maps the chart own
 | `initContainers` | Extra init containers | `[]` |
 | `extraContainers` | Extra sidecar containers | `[]` |
 | `priorityClassName` | Pod priority class | `""` |
+| `enableServiceLinks` | Inject Kubernetes service-link env vars into the pods | `false` |
 | `terminationGracePeriodSeconds` | Shutdown grace period | unset (Kubernetes default 30s) |
 | `tests.enabled` | Render the `helm test` hook | `true` |
 | `tests.image.repository` | Test hook image (needs curl) | `curlimages/curl` |

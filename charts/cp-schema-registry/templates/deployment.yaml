@@ -33,6 +33,10 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "cp-schema-registry.serviceAccountName" . }}
+      {{- /* Off by default: this image reads SCHEMA_REGISTRY_* as configuration and
+      Kubernetes injects <SERVICE>_PORT and friends for every Service in the namespace.
+      See values.yaml. */}}
+      enableServiceLinks: {{ $v.enableServiceLinks }}
       {{- /* Schema Registry talks to Kafka, never to the Kubernetes API, so the token
       the default ServiceAccount would mount is a credential with no use here. */}}
       automountServiceAccountToken: {{ $v.serviceAccount.automountServiceAccountToken }}

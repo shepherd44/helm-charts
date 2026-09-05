@@ -9,6 +9,30 @@ no upstream changelog to keep alongside this one.
 
 Each release is tagged in git as `cp-schema-registry-<version>`.
 
+## 1.5.0
+
+- **`enableServiceLinks: false`.** Kubernetes injects an environment variable set for
+  every Service in the namespace — `<SERVICE_NAME>_PORT`, `_SERVICE_HOST`,
+  `_PORT_8081_TCP_ADDR` and so on. This image reads `SCHEMA_REGISTRY_*` as
+  configuration, so a Service whose name uppercases into that prefix lands values like
+  `port=tcp://10.100.149.104:8081` in the properties and the container exits 1 a second
+  after start:
+
+  ```
+  PORT is deprecated. Please use SCHEMA_REGISTRY_LISTENERS instead.
+  ```
+
+  It is not only this chart's own Service — any sibling named `schema-registry*` does
+  it — and the injected set grows with the number of ports, so overriding the variable
+  names one by one does not hold. Schema Registry never reads them; it finds brokers
+  over DNS. The whole class is turned off.
+
+  **This changes the rendered pod for every release**, so upgrading rolls the pods once.
+  That is deliberate: the failure it prevents is an immediate crash whose only clue is
+  the deprecation line above, and the default is the bug.
+
+  Set `enableServiceLinks: true` to get the old behaviour back.
+
 ## 1.4.0
 
 - **`commonLabels` and `commonAnnotations`**, applied to every object the chart renders

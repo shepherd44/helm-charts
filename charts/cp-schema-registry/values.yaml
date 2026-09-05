@@ -145,6 +145,18 @@ extraVolumeMounts: []
   #   mountPath: /etc/schema-registry/secrets
   #   readOnly: true
 
+## Kubernetes injects an environment variable set for every Service in the namespace
+## when this is on -- <SERVICE_NAME>_PORT, _SERVICE_HOST, _PORT_8081_TCP_ADDR and so on.
+## This image reads SCHEMA_REGISTRY_* as configuration, so a Service whose name
+## uppercases into that prefix lands values like `port=tcp://10.100.149.104:8081` in
+## the properties and the container exits 1 on startup, right after
+## "PORT is deprecated. Please use SCHEMA_REGISTRY_LISTENERS instead."
+##
+## It is not only this chart's own Service: any sibling named schema-registry* does it,
+## and the injected set grows with the number of ports. Schema Registry never reads
+## these variables -- it finds brokers over DNS -- so the whole class is turned off.
+enableServiceLinks: false
+
 ## Pass-throughs. Empty by default, so they change nothing until set.
 initContainers: []
 extraContainers: []

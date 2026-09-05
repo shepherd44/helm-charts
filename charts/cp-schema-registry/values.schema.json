@@ -227,6 +227,10 @@
     "priorityClassName": {
       "type": "string"
     },
+    "enableServiceLinks": {
+      "type": "boolean",
+      "description": "off by default: Kubernetes service-link variables collide with this image's SCHEMA_REGISTRY_* configuration convention"
+    },
     "terminationGracePeriodSeconds": {
       "type": [
         "integer",
