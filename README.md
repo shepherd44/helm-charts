@@ -38,6 +38,30 @@ helm uninstall my-release
 
 Each chart's own README documents its values and a working install for that chart.
 
+### From the registry instead
+
+Releases from 1.2.0 on are also pushed to GitHub Container Registry, so the chart can be
+installed without adding a repo at all:
+
+```shell
+helm install my-release oci://ghcr.io/shepherd44/charts/cp-schema-registry --version 1.2.0
+```
+
+Same chart, same bytes — a second distribution channel, not a fork of the line. Registry
+artifacts are content-addressed, so a published digest cannot be repackaged, and each one
+is signed with keyless cosign:
+
+```shell
+cosign verify ghcr.io/shepherd44/charts/cp-schema-registry:1.2.0 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/shepherd44/helm-charts/'
+```
+
+There is no public key to fetch: the signing identity is the release workflow itself,
+recorded in Sigstore's public transparency log. A `.tgz` taken from the Pages repo is the
+same file, but verify it through the registry — that is where the signature lives.
+
+
 Using it from Argo CD — the repo is a Helm source like any other:
 
 ```yaml
@@ -185,6 +209,17 @@ git push origin $CHART-$VERSION
 Tags are `<chart>-<version>` because this repo holds more than one chart. The tag
 message records what the release is; for a forked chart it also records the upstream
 version and commit it was based on, and the local changes applied on top.
+
+Pushing that tag fires `release-oci.yaml`, which packages the same chart again and pushes
+it to `ghcr.io/shepherd44/charts` as an OCI artifact, signed with keyless cosign. It
+publishes nothing into `docs/` and touches no commit — the static repo above stays the
+primary channel, and the registry is a second way to get the identical chart.
+
+The workflow refuses a tag whose version does not match the chart's `Chart.yaml`, so a
+mistyped tag fails instead of publishing something surprising.
+
+A package pushed to ghcr.io for the first time is **private**. Make it public once, under
+the org's Packages settings, or `helm pull oci://...` fails with a 401 for everyone else.
 
 ## Versioning a forked chart
 

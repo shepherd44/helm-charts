@@ -1,0 +1,89 @@
+name: release-oci
+
+# Fires on a release tag and pushes the same chart a second way: as an OCI
+# artifact in GitHub Container Registry, signed with keyless cosign.
+#
+# docs/ is unaffected and stays the primary channel. What this adds is content
+# addressing -- a registry artifact cannot be repackaged under the same digest,
+# so the repo's immutability rule becomes a property instead of a discipline --
+# and a signature anyone can verify without a key to distribute.
+on:
+  push:
+    tags:
+      - "*-[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, e.g. cp-schema-registry-1.2.0
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+  # Keyless signing: the identity in the certificate is this workflow, proven by
+  # the OIDC token. There is no private key anywhere.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.18.4
+
+      - uses: sigstore/cosign-installer@v3
+
+      # cp-schema-registry-1.2.0 -> chart cp-schema-registry, version 1.2.0
+      - name: Read the tag
+        id: tag
+        run: |
+          tag='${{ github.event.inputs.tag || github.ref_name }}'
+          version="${tag##*-}"
+          chart="${tag%-$version}"
+          if [ ! -d "charts/$chart" ]; then
+            echo "no chart directory for tag $tag (looked for charts/$chart)" >&2
+            exit 1
+          fi
+          got=$(awk '/^version:/{print $2; exit}' "charts/$chart/Chart.yaml")
+          if [ "$got" != "$version" ]; then
+            echo "tag says $version, charts/$chart/Chart.yaml says $got" >&2
+            exit 1
+          fi
+          echo "chart=$chart" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Package
+        run: |
+          helm dependency update "charts/${{ steps.tag.outputs.chart }}"
+          helm package "charts/${{ steps.tag.outputs.chart }}" --destination /tmp/pkg
+
+      - name: Push to ghcr.io
+        id: push
+        env:
+          # Lowercased: registry paths are case-sensitive and the owner is not.
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          helm registry login ghcr.io -u '${{ github.actor }}' -p '${{ secrets.GITHUB_TOKEN }}'
+          repo="ghcr.io/$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')/charts"
+          helm push "/tmp/pkg/${{ steps.tag.outputs.chart }}-${{ steps.tag.outputs.version }}.tgz" \
+            "oci://$repo" | tee /tmp/push.log
+          digest=$(awk '/^Digest: /{print $2}' /tmp/push.log)
+          echo "ref=$repo/${{ steps.tag.outputs.chart }}@$digest" >> "$GITHUB_OUTPUT"
+
+      # Signs the artifact by digest, not by tag: a tag can be moved, a digest
+      # cannot. --yes skips the confirmation prompt for the transparency log.
+      - name: Sign
+        run: cosign sign --yes '${{ steps.push.outputs.ref }}'
+
+      - name: Verify what was just published
+        run: |
+          cosign verify '${{ steps.push.outputs.ref }}' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp '^https://github.com/${{ github.repository }}/' \
+            > /dev/null
+          echo "published and verified: ${{ steps.push.outputs.ref }}"
