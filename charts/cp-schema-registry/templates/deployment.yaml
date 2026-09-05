@@ -20,7 +20,7 @@ spec:
       {{- range $key, $value := $v.podAnnotations }}
         {{ $key }}: {{ $value | quote }}
       {{- end }}
-      {{- if $v.metrics.enabled }}
+      {{- if and $v.metrics.enabled $v.metrics.scrapeAnnotations }}
         prometheus.io/scrape: "true"
         prometheus.io/port: {{ $v.metrics.port | quote }}
       {{- end }}
@@ -123,6 +123,7 @@ spec:
           - /etc/jmx-schema-registry/jmx-schema-registry-prometheus.yml
           ports:
           - containerPort: {{ $v.metrics.port }}
+            name: {{ include "cp-schema-registry.metricsPortName" . }}
           resources:
 {{ toYaml $v.metrics.resources | indent 12 }}
           volumeMounts:

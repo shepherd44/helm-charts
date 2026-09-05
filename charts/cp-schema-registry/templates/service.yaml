@@ -10,7 +10,7 @@ spec:
     - name: schema-registry
       port: {{ $v.service.port }}
     {{- if $v.metrics.enabled }}
-    - name: metrics
+    - name: {{ include "cp-schema-registry.metricsPortName" . }}
       port: {{ $v.metrics.port }}
     {{- end }}
   selector:

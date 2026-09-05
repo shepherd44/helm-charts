@@ -252,6 +252,76 @@ metrics:
     runAsGroup: 10001
     runAsNonRoot: true
 
+  ## prometheus.io/scrape and prometheus.io/port on the pod. These only work for a
+  ## Prometheus configured with kubernetes_sd_configs and relabeling; an Operator
+  ## install ignores them and reads the CRDs below instead. Left on so existing
+  ## setups keep working — turn it off when using serviceMonitor or podMonitor, so
+  ## the same target is not also discovered by annotation.
+  scrapeAnnotations: true
+
+  ## ServiceMonitor for the Prometheus Operator. Scrapes the exporter port through
+  ## the chart's Service, which is the usual choice: it follows the endpoints, so it
+  ## survives replica changes.
+  ##
+  ## `labels` almost always has to carry whatever the Prometheus resource selects on
+  ## — with kube-prometheus-stack that is `release: <stack release name>`. Without it
+  ## the object is created and quietly never scraped.
+  ##
+  ## Requires `metrics.enabled`: there is nothing listening otherwise, and the chart
+  ## fails rather than rendering a monitor pointed at a port that does not exist.
+  serviceMonitor:
+    enabled: false
+    ## Defaults to the release namespace.
+    namespace: ""
+    labels: {}
+    annotations: {}
+    jobLabel: ""
+    ## Empty means the Prometheus global default.
+    interval: ""
+    scrapeTimeout: ""
+    path: /metrics
+    scheme: http
+    honorLabels: false
+    ## Extra matchLabels, ANDed with the chart's own selector.
+    selector: {}
+    relabelings: []
+    metricRelabelings: []
+
+  ## PodMonitor. The alternative to serviceMonitor, for scraping pods directly rather
+  ## than through the Service. Enabling both is an error — the same target would be
+  ## scraped twice under two job names.
+  podMonitor:
+    enabled: false
+    namespace: ""
+    labels: {}
+    annotations: {}
+    jobLabel: ""
+    interval: ""
+    scrapeTimeout: ""
+    path: /metrics
+    scheme: http
+    honorLabels: false
+    selector: {}
+    relabelings: []
+    metricRelabelings: []
+
+  ## PrometheusRule. No rules are shipped: what is worth alerting on depends on the
+  ## deployment, and a chart that ships opinionated alerts tends to ship noise.
+  ## `rules` goes into a single group named after the release.
+  prometheusRule:
+    enabled: false
+    namespace: ""
+    labels: {}
+    annotations: {}
+    rules: []
+      # - alert: SchemaRegistryDown
+      #   expr: up{job="my-release-cp-schema-registry"} == 0
+      #   for: 5m
+      #   labels:
+      #     severity: critical
+      #   annotations:
+      #     summary: Schema Registry is not being scraped
+
 ## ------------------------------------------------------------------------------
 ## Deprecated: the pre-1.0.0 layout.
 ##

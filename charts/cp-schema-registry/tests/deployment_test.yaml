@@ -137,3 +137,22 @@ tests:
             name: truststore
             secret:
               secretName: truststore
+
+  - it: names the exporter port so a PodMonitor can reference it
+    set:
+      metrics.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[1].ports[0].name
+          value: metrics
+      - equal:
+          path: spec.template.metadata.annotations["prometheus.io/scrape"]
+          value: "true"
+
+  - it: drops the scrape annotations when the operator CRDs are doing the discovery
+    set:
+      metrics.enabled: true
+      metrics.scrapeAnnotations: false
+    asserts:
+      - notExists:
+          path: spec.template.metadata.annotations["prometheus.io/scrape"]

@@ -9,6 +9,43 @@ no upstream changelog to keep alongside this one.
 
 Each release is tagged in git as `cp-schema-registry-<version>`.
 
+## 1.1.0
+
+- **ServiceMonitor, PodMonitor and PrometheusRule** under `metrics`, all off by default.
+  The chart previously shipped only `prometheus.io/scrape` annotations, which a
+  Prometheus Operator install ignores — so the exporter could be enabled and scraped by
+  nothing, which is the state this chart was in. The annotations are still emitted, now
+  behind `metrics.scrapeAnnotations`, so a release does not end up discovered twice.
+
+  Both monitors reference the exporter port **by name**, from a single helper the
+  Service and the container port also use, so the three cannot drift apart. The
+  exporter's container port is named for the first time — that is a visible change in
+  the rendered pod for anyone running the sidecar.
+
+  Two combinations now fail at render time instead of quietly doing nothing: a monitor
+  without `metrics.enabled` (nothing is listening), and both monitors at once (one
+  exporter scraped under two job names). `prometheusRule.enabled` with no rules fails
+  too; the chart ships no default alerts, because what is worth alerting on depends on
+  the deployment.
+
+- **`values.schema.json`.** Helm now validates values on install, upgrade, lint and
+  template. Permissive at the top level — unknown keys are fine, since people carry
+  extra values through wrappers — and strict inside the maps the chart owns, which is
+  where typos happen: `--set image.repo=x` is now an error rather than a successful
+  install of the defaults.
+
+- **Fixed: caller-supplied labels were appended, not merged.** `ingress.labels`,
+  `serviceAccount.labels` and now the monitors' labels were emitted after the chart's
+  own, so setting one the chart already sets produced a duplicate YAML key and kubectl
+  refused the manifest with "mapping key already defined". This is not hypothetical for
+  the monitors: kube-prometheus-stack selects on `release`, which is one of the chart's
+  own labels. Caller labels now win, and every label value is stringified so an
+  `appVersion` like `8.0` cannot render as a number.
+
+  Side effect on the objects that take caller labels — the ServiceAccount and the
+  Ingress — is that their `metadata.labels` now render in alphabetical order. Same
+  labels, same values, different order in the diff.
+
 ## 1.0.0
 
 Breaking, in the values only: the rendered manifests are unchanged. Every values file

@@ -1,0 +1,105 @@
+suite: prometheus operator resources
+release:
+  name: t
+tests:
+  - it: renders nothing by default
+    templates:
+      - servicemonitor.yaml
+      - podmonitor.yaml
+      - prometheusrule.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: points the ServiceMonitor at the Service port by name
+    templates:
+      - servicemonitor.yaml
+    set:
+      metrics.enabled: true
+      metrics.serviceMonitor.enabled: true
+    asserts:
+      - equal:
+          path: spec.endpoints[0].port
+          value: metrics
+      - equal:
+          path: spec.selector.matchLabels
+          value:
+            app: cp-schema-registry
+            release: t
+      - equal:
+          path: metadata.namespace
+          value: NAMESPACE
+
+  - it: lets the operator's own selector label win instead of emitting it twice
+    templates:
+      - servicemonitor.yaml
+    set:
+      metrics.enabled: true
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.labels:
+        release: kube-prometheus-stack
+    asserts:
+      - equal:
+          path: metadata.labels["release"]
+          value: kube-prometheus-stack
+
+  - it: scrapes pods directly through the named container port
+    templates:
+      - podmonitor.yaml
+    set:
+      metrics.enabled: true
+      metrics.podMonitor.enabled: true
+      metrics.podMonitor.interval: 60s
+    asserts:
+      - equal:
+          path: spec.podMetricsEndpoints[0].port
+          value: metrics
+      - equal:
+          path: spec.podMetricsEndpoints[0].interval
+          value: 60s
+
+  - it: refuses a monitor with no exporter to scrape
+    templates:
+      - servicemonitor.yaml
+    set:
+      metrics.serviceMonitor.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "metrics.serviceMonitor/podMonitor need metrics.enabled: without the exporter sidecar there is nothing listening on the port they point at."
+
+  - it: refuses both monitors at once
+    templates:
+      - servicemonitor.yaml
+    set:
+      metrics.enabled: true
+      metrics.serviceMonitor.enabled: true
+      metrics.podMonitor.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "metrics.serviceMonitor.enabled and metrics.podMonitor.enabled are mutually exclusive: both scrape the same exporter, under two job names."
+
+  - it: puts the rules in one group named after the release
+    templates:
+      - prometheusrule.yaml
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.rules:
+        - alert: SchemaRegistryDown
+          expr: up == 0
+          for: 5m
+    asserts:
+      - equal:
+          path: spec.groups[0].name
+          value: t-cp-schema-registry
+      - equal:
+          path: spec.groups[0].rules[0].alert
+          value: SchemaRegistryDown
+
+  - it: refuses an empty rule group
+    templates:
+      - prometheusrule.yaml
+    set:
+      metrics.prometheusRule.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "metrics.prometheusRule.enabled is on but metrics.prometheusRule.rules is empty: the chart ships no default alerts, so this would create an empty rule group."

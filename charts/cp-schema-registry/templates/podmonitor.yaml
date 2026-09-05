@@ -1,0 +1,52 @@
+{{- $v := include "cp-schema-registry.values" . | fromYaml -}}
+{{- include "cp-schema-registry.validateMetrics" . -}}
+{{- if and $v.metrics.enabled $v.metrics.podMonitor.enabled }}
+{{- $pm := $v.metrics.podMonitor }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ template "cp-schema-registry.fullname" . }}
+  namespace: {{ $pm.namespace | default .Release.Namespace }}
+  labels:
+{{ include "cp-schema-registry.mergedLabels" (list . $pm.labels) | indent 4 }}
+  {{- with $pm.annotations }}
+  annotations:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+spec:
+  {{- with $pm.jobLabel }}
+  jobLabel: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+{{ include "cp-schema-registry.selectorLabels" . | indent 6 }}
+    {{- with $pm.selector }}
+{{ toYaml . | indent 6 }}
+    {{- end }}
+  {{- if $pm.namespace }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  {{- end }}
+  podMetricsEndpoints:
+    - port: {{ include "cp-schema-registry.metricsPortName" . }}
+      path: {{ $pm.path }}
+      scheme: {{ $pm.scheme }}
+      {{- with $pm.interval }}
+      interval: {{ . }}
+      {{- end }}
+      {{- with $pm.scrapeTimeout }}
+      scrapeTimeout: {{ . }}
+      {{- end }}
+      {{- if $pm.honorLabels }}
+      honorLabels: true
+      {{- end }}
+      {{- with $pm.relabelings }}
+      relabelings:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with $pm.metricRelabelings }}
+      metricRelabelings:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+{{- end }}

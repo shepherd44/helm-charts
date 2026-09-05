@@ -89,7 +89,14 @@ jobs:
             helm dependency update "$chart"
             case "$chart" in
               */cp-schema-registry)
-                args=(-f "$chart/ci/metrics-values.yaml" -f "$chart/ci/ingress-pdb-values.yaml") ;;
+                # The monitors are not in ci/ because ct installs those on a cluster
+                # with no Prometheus Operator CRDs; kubeconform validates them here
+                # against the CRD catalog instead.
+                args=(-f "$chart/ci/metrics-values.yaml" -f "$chart/ci/ingress-pdb-values.yaml"
+                      --set metrics.serviceMonitor.enabled=true
+                      --set metrics.prometheusRule.enabled=true
+                      --set 'metrics.prometheusRule.rules[0].alert=SchemaRegistryDown'
+                      --set 'metrics.prometheusRule.rules[0].expr=up == 0') ;;
               */mongodb-sharded)
                 args=(--set metrics.enabled=true --set volumePermissions.enabled=true) ;;
               *)

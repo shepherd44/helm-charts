@@ -29,7 +29,7 @@ carries its `LICENSE` verbatim, recovered from a surviving fork. Local changes a
 
 | | |
 |---|---|
-| Chart | `1.0.0` |
+| Chart | `1.1.0` |
 | Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
 
 Confluent supports each Community release for two years from its minor release date.
@@ -76,7 +76,7 @@ should follow, and the list is about to grow.
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 1.0.0 \
+  --version 1.1.0 \
   --set kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
@@ -87,7 +87,7 @@ With a values file:
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 1.0.0 -f my-values.yaml
+  --version 1.1.0 -f my-values.yaml
 ```
 
 ```yaml
@@ -333,18 +333,72 @@ and then runs `helm test` against it.
 
 ## Metrics
 
-`metrics.enabled` runs a JMX exporter sidecar on port 5556. It is
-**off by default**, for two reasons:
-
-- it is a second JVM in every pod (~77Mi in the deployments this chart came from), and
-- the chart creates no ServiceMonitor or PodMonitor. It only sets `prometheus.io/scrape`
-  annotations, which a Prometheus Operator install ignores. Enabled but unscraped is the
-  state this chart was in.
-
-Turn it on only once something is configured to scrape port 5556:
+`metrics.enabled` runs a JMX exporter sidecar on port 5556. It is **off by default**: it
+is a second JVM in every pod (~77Mi in the deployments this chart came from), and it is
+worth nothing until something scrapes it.
 
 ```console
 --set metrics.enabled=true
+```
+
+### Getting it scraped
+
+Two mechanisms, and which one works depends on how Prometheus was installed.
+
+**Prometheus Operator / kube-prometheus-stack** reads `ServiceMonitor` and `PodMonitor`
+custom resources and ignores scrape annotations entirely. This is the common case:
+
+```yaml
+metrics:
+  enabled: true
+  scrapeAnnotations: false        # nothing reads them here
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack   # see below
+```
+
+`labels` almost always has to carry whatever the `Prometheus` resource selects on. With
+kube-prometheus-stack that is `release: <the stack's release name>`; check with
+
+```console
+kubectl get prometheus -A -o jsonpath='{.items[*].spec.serviceMonitorSelector}'
+```
+
+Get it wrong and the ServiceMonitor is created, looks right, and is never scraped —
+which is the failure this chart's users hit before it existed.
+
+`podMonitor` is the same thing against the pods rather than the Service. Prefer
+`serviceMonitor`: it follows the Service's endpoints, so replica changes need no
+attention. Enabling both is an error — one exporter, scraped twice, under two job names.
+
+A monitor without `metrics.enabled` is also an error rather than a no-op: there would be
+nothing listening on the port it points at.
+
+**A hand-configured Prometheus** using `kubernetes_sd_configs` and relabeling reads the
+`prometheus.io/scrape` and `prometheus.io/port` annotations on the pod. Those are still
+emitted, controlled by `metrics.scrapeAnnotations` (default `true` — turning it off is
+what keeps an Operator setup from also discovering the pod by annotation).
+
+### Alerts
+
+`metrics.prometheusRule` creates a `PrometheusRule`, with the rules given in
+`metrics.prometheusRule.rules` in one group named after the release. The chart ships no
+default alerts — what is worth alerting on depends on the deployment — so enabling it
+without rules is an error rather than an empty rule group:
+
+```yaml
+metrics:
+  prometheusRule:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack
+    rules:
+      - alert: SchemaRegistryDown
+        expr: up{job="my-release-cp-schema-registry"} == 0
+        for: 5m
+        labels:
+          severity: critical
 ```
 
 The sidecar image is `shepherd9664/jmx-exporter`, built from
@@ -388,6 +442,11 @@ helm install my-schema-registry shepherd44/cp-schema-registry \
 ```
 
 > A default [values.yaml](values.yaml) is provided.
+
+Values are validated against [values.schema.json](values.schema.json) on install,
+upgrade, lint and template. It is permissive about keys the chart does not know — people
+carry extra values through wrappers — and strict inside the maps the chart owns, so
+`--set image.repo=x` fails with the offending path instead of installing the defaults.
 
 | Parameter | Description | Default |
 | --------- | ----------- | ------- |
@@ -452,6 +511,26 @@ helm install my-schema-registry shepherd44/cp-schema-registry \
 | `metrics.port` | Exporter port | `5556` |
 | `metrics.resources` | Exporter requests and limits | `{}` |
 | `metrics.securityContext` | Exporter security context | UID/GID `10001`, non-root |
+| `metrics.scrapeAnnotations` | Emit `prometheus.io/scrape` on the pod | `true` |
+| `metrics.serviceMonitor.enabled` | Create a ServiceMonitor | `false` |
+| `metrics.serviceMonitor.namespace` | Namespace for it | release namespace |
+| `metrics.serviceMonitor.labels` | Extra labels — usually the Prometheus selector | `{}` |
+| `metrics.serviceMonitor.annotations` | Extra annotations | `{}` |
+| `metrics.serviceMonitor.jobLabel` | Label to take the job name from | unset |
+| `metrics.serviceMonitor.interval` | Scrape interval | Prometheus default |
+| `metrics.serviceMonitor.scrapeTimeout` | Scrape timeout | Prometheus default |
+| `metrics.serviceMonitor.path` | Metrics path | `/metrics` |
+| `metrics.serviceMonitor.scheme` | `http` or `https` | `http` |
+| `metrics.serviceMonitor.honorLabels` | Keep target labels on collision | `false` |
+| `metrics.serviceMonitor.selector` | Extra matchLabels on the Service | `{}` |
+| `metrics.serviceMonitor.relabelings` | Target relabelings | `[]` |
+| `metrics.serviceMonitor.metricRelabelings` | Metric relabelings | `[]` |
+| `metrics.podMonitor.*` | Same keys, scraping pods instead of the Service | off |
+| `metrics.prometheusRule.enabled` | Create a PrometheusRule | `false` |
+| `metrics.prometheusRule.namespace` | Namespace for it | release namespace |
+| `metrics.prometheusRule.labels` | Extra labels — usually the Prometheus selector | `{}` |
+| `metrics.prometheusRule.annotations` | Extra annotations | `{}` |
+| `metrics.prometheusRule.rules` | Alerting/recording rules; required when enabled | `[]` |
 | `nameOverride` | Override the chart name | unset |
 | `fullnameOverride` | Override the full release name | unset |
 | `overrideGroupId` | Override the Schema Registry group id | unset |
