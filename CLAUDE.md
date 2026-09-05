@@ -114,14 +114,41 @@ here does nothing until that build exists — check the tag on Docker Hub first.
 
 ## Before claiming a chart change works
 
+A fresh worktree has no built dependencies — `charts/mongodb-sharded/charts/common-*.tgz`
+is gitignored — so **`helm dependency update` comes first, before lint, not just before
+packaging.** Without it `helm lint charts/mongodb-sharded` fails on a `common.*` template
+include, which looks like a chart bug and is not one.
+
+Then lint and render with that chart's optional pieces switched on: several images and
+the image-verification gate only appear then. The flags differ per chart; there is no
+generic set.
+
 ```shell
-helm lint charts/$CHART
-helm template t charts/$CHART --set metrics.enabled=true --set volumePermissions.enabled=true
+helm dependency update charts/mongodb-sharded
+helm lint charts/mongodb-sharded
+helm template t charts/mongodb-sharded \
+  --set metrics.enabled=true --set volumePermissions.enabled=true
 ```
 
-The second one matters: the image-verification gate and several images only appear with
-those subcharts enabled. Grep the output for `image:` and confirm every one is a tag
-that actually exists.
+```shell
+helm lint charts/cp-schema-registry
+helm template t charts/cp-schema-registry \
+  --set schema_registry.kafka.bootstrapServers=PLAINTEXT://kafka:9092 \
+  --set schema_registry.prometheus.jmx.enabled=true \
+  --set schema_registry.ingress.enabled=true \
+  --set 'schema_registry.ingress.hosts[0].host=sr.example.com' \
+  --set 'schema_registry.ingress.hosts[0].paths[0].path=/'
+```
+
+**`--set` on a key a chart does not have is accepted silently.** Reusing one chart's
+flags on the other renders plain defaults and exits zero, which reads exactly like a
+passing check. `cp-schema-registry` nests everything under `schema_registry`, so
+`metrics.enabled=true` does nothing there — one image in the output instead of two.
+
+`charts/common` is a library chart: `helm lint` works, `helm template` fails with
+"library charts are not installable". Expected, not a regression.
+
+Grep the output for `image:` and confirm every tag actually exists on Docker Hub.
 
 After publishing, verify against the live repo rather than the working tree — add the
 Pages URL as a helm repo, `helm pull`, and render the pulled tarball.
