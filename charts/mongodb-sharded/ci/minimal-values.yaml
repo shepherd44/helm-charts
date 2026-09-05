@@ -6,6 +6,11 @@
 # node only add teardown time.
 shards: 1
 
+# Explicit resources, not a preset. `nano` caps memory at 192Mi and MongoDB 8 is
+# OOMKilled on startup there, which shows up as a config server crash-looping and
+# every other pod reporting ECONNREFUSED against it. 512Mi is enough to come up;
+# three pods at that request still fit a runner.
+
 auth:
   rootPassword: ct-install-not-a-real-password
 
@@ -13,15 +18,30 @@ configsvr:
   replicaCount: 1
   persistence:
     enabled: false
-  resourcesPreset: nano
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
 
 shardsvr:
   persistence:
     enabled: false
   dataNode:
     replicaCount: 1
-    resourcesPreset: nano
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
 
 mongos:
   replicaCount: 1
-  resourcesPreset: nano
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
