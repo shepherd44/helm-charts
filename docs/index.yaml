@@ -4,6 +4,46 @@ entries:
   - annotations:
       artifacthub.io/changes: |
         - kind: added
+          description: HTTPRoute for the Gateway API, independent of the existing Ingress
+      artifacthub.io/images: |
+        - name: cp-schema-registry
+          image: confluentinc/cp-schema-registry:7.9.9
+        - name: jmx-exporter
+          image: shepherd9664/jmx-exporter:1.6.0-latest
+        - name: test-connection
+          image: curlimages/curl:8.11.1
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart source
+          url: https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+        - name: Changelog
+          url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-schema-registry/CHANGELOG.md
+        - name: Schema Registry version reference
+          url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-schema-registry/docs/schema-registry-versions.md
+    apiVersion: v2
+    appVersion: 7.9.9
+    created: "2026-09-05T17:33:13.244913+09:00"
+    description: A Helm chart for Confluent Schema Registry on Kubernetes
+    digest: 180105b7ceb77fb4c9e2a3865dab1ff7fcc0cbff2755887ba1f7bf1dba0e2303
+    home: https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+    keywords:
+    - kafka
+    - schema-registry
+    - confluent
+    kubeVersion: '>=1.22.0-0'
+    maintainers:
+    - name: shepherd44
+      url: https://github.com/shepherd44
+    name: cp-schema-registry
+    sources:
+    - https://github.com/shepherd44/helm-charts/tree/main/charts/cp-schema-registry
+    type: application
+    urls:
+    - https://shepherd44.github.io/helm-charts/docs/cp-schema-registry-1.3.0.tgz
+    version: 1.3.0
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
           description: topologySpreadConstraints pass-through
         - kind: added
           description: optional NetworkPolicy, ingress by default and egress opt-in
@@ -300,4 +340,4 @@ entries:
     urls:
     - https://shepherd44.github.io/helm-charts/docs/mongodb-sharded-9.4.17.tgz
     version: 9.4.17
-generated: "2026-09-05T13:46:00.552323+09:00"
+generated: "2026-09-05T17:33:13.23574+09:00"
