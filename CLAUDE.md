@@ -18,36 +18,41 @@ committed on purpose — do not gitignore it, and do not hand-edit `index.yaml`.
 ## Work in a worktree
 
 **Every change — code, chart, docs — happens in a worktree, never in the primary
-checkout.** Use the `EnterWorktree` tool rather than raw worktree commands. That tool
-fires only when a worktree is asked for by the user or named in project instructions,
-which is what this section is for.
+checkout.** A sibling `<repo>-wt/<branch>/` directory, derived from the repo rather than
+written out, so this works from any clone on any machine:
 
-```
-EnterWorktree(name: "<type>/<short-name>")     # feat, fix, chore, docs
-```
+```shell
+BR=<type>/<short-name>                          # feat, fix, chore, docs
+ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+WT="$ROOT/../$(basename "$ROOT")-wt/$BR"
 
-It creates `.claude/worktrees/<name>` on a new branch and moves the session into it. The
-base is `origin/<default-branch>` rather than local HEAD, under the default
-`worktree.baseRef: fresh` — so the primary checkout sitting on some other branch cannot
-leak in. Do not set that to `head` for this repo.
-
-Leaving:
-
-```
-ExitWorktree(action: "keep")      # come back to it later
-ExitWorktree(action: "remove")    # work is merged or abandoned
+git fetch -q origin
+git worktree add -b "$BR" "$WT" origin/main
+cd "$WT"
 ```
 
-`remove` refuses while uncommitted files or unmerged commits remain, which is the
-behaviour to want — ask the user before passing `discard_changes`. Staying in the
-worktree until the session ends is fine too; the user is prompted then.
+`--git-common-dir`, not `--show-toplevel`: run from inside an existing worktree the
+latter returns that worktree, and the sibling path nests inside itself. The common dir is
+the primary checkout's `.git` from anywhere in the repo, so this resolves the same way
+whether it runs from the primary checkout or from another worktree.
 
-`.claude/worktrees/` is ignored, so a worktree never appears as untracked files in its
-own status output.
+Branch from `origin/main`, not from local HEAD. `git worktree add` takes whatever ref it
+is handed, and the primary checkout is often parked on something unrelated — that is the
+mistake this line exists to prevent, so keep the explicit `origin/main` and the `fetch`
+before it.
 
-A worktree-isolated session is fenced: commands that cannot be shown to stay inside the
-worktree are refused. Keep shell one-liners simple and run them from the worktree
-directory rather than wrapping them in heredocs that mention paths outside it.
+The path is a sibling of the repo, not inside it: several worktrees can exist at once,
+the directory mirrors the branch name, and nothing lands under the repo where it could be
+committed by accident.
+
+Clean up once the branch is merged — a leftover worktree is a second checkout of the same
+repo quietly going stale:
+
+```shell
+git worktree remove "$WT"
+git branch -d "$BR"
+git worktree list          # confirm only the primary checkout remains
+```
 
 Package and index inside the worktree, so `docs/` and the chart change land in one
 commit. Publishing still only happens once that commit reaches `main`.
