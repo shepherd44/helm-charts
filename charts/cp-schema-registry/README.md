@@ -14,6 +14,13 @@ This chart bootstraps a deployment of a Confluent Schema Registry
   Helm 3: Helm 4 is only supported against the Kubernetes versions it was built for.
 * A healthy and accessible Kafka Cluster
 
+## License
+
+Apache-2.0, inherited from `confluentinc/cp-helm-charts`. Upstream shipped no per-chart
+license file and the repository has since been deleted, so [LICENSE.md](LICENSE.md)
+carries its `LICENSE` verbatim, recovered from a surviving fork. Local changes are in
+[CHANGELOG.md](CHANGELOG.md).
+
 ## Docker Image Source
 
 * [DockerHub -> ConfluentInc](https://hub.docker.com/u/confluentinc/)
