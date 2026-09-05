@@ -2,7 +2,15 @@ apiVersion: v2
 name: cp-schema-registry
 description: A Helm chart for Confluent Schema Registry on Kubernetes
 type: application
-version: 0.5.0
+
+## The floor is what the chart actually needs, not what upstream Kubernetes still
+## supports: 1.22 went EOL in October 2022 and is kept here deliberately for legacy
+## clusters. Everything the chart emits exists in 1.22 — apps/v1, networking.k8s.io/v1
+## Ingress (GA 1.19), policy/v1 PodDisruptionBudget (GA 1.21), seccompProfile (GA 1.19).
+## The -0 suffix makes pre-release cluster versions such as 1.22.0-alpha.3 compare
+## correctly instead of sorting below 1.22.0.
+kubeVersion: ">=1.22.0-0"
+version: 0.6.0
 appVersion: "7.9.9"
 keywords:
   - kafka

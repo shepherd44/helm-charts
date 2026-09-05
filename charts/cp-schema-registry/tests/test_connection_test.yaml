@@ -1,0 +1,24 @@
+suite: helm test hook
+templates:
+  - tests/test-connection.yaml
+release:
+  name: t
+tests:
+  - it: is a test hook that curls /subjects on the chart's own Service
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: test
+      - equal:
+          path: spec.restartPolicy
+          value: Never
+      - contains:
+          path: spec.containers[0].args
+          content: http://t-cp-schema-registry:8081/subjects
+
+  - it: can be turned off for air-gapped installs
+    set:
+      schema_registry.tests.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0

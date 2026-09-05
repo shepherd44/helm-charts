@@ -9,6 +9,32 @@ no upstream changelog to keep alongside this one.
 
 Each release is tagged in git as `cp-schema-registry-<version>`.
 
+## 0.6.0
+
+Nothing about the running workload changes. The only new object is the `helm test` hook,
+which Helm creates on `helm test` and never on install or upgrade; every other rendered
+manifest is identical to 0.5.0 apart from the `chart` label. This release is about the
+chart being checkable.
+
+- **`kubeVersion: ">=1.22.0-0"`.** The floor is now declared, so Helm refuses to install
+  on anything older instead of failing at apply time. Everything the chart emits already
+  existed in 1.22 — `apps/v1`, `networking.k8s.io/v1` Ingress, `policy/v1`
+  PodDisruptionBudget, `seccompProfile` — so this records a fact rather than changing one.
+  The `-0` suffix makes pre-release cluster versions such as `1.22.0-alpha.3` compare
+  correctly.
+- **`helm test` hook** (`schema_registry.tests`, on by default). A pod that curls
+  `/subjects` on the release's own Service. It runs only on `helm test`, and proves what
+  a successful install does not: the Service selector matches the pods, the port name
+  resolves, and the Kafka store is readable.
+- **`.helmignore` covers `ci/`, `tests/` and `.omc/`.** The CI values files and the
+  template unit tests are repository content, not part of the package. The patterns are
+  anchored with a leading slash on purpose — a bare `tests/` would also drop
+  `templates/tests/`, i.e. the test hook, out of the tarball.
+
+Repository-level, outside the chart: `ct lint` (which enforces this version bump),
+`helm-unittest` suites under `tests/`, `kubeconform` validation at 1.22 and 1.31, and
+`ct install` plus `helm test` on KinD against a single-node Kafka. See the CI workflow.
+
 ## 0.5.0
 
 Acting on the field inventory in

@@ -1,0 +1,82 @@
+suite: deployment
+templates:
+  - deployment.yaml
+release:
+  name: t
+tests:
+  - it: emits leader.eligibility, never the deprecated master.eligibility
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SCHEMA_REGISTRY_LEADER_ELIGIBILITY
+            value: "true"
+      - notMatchRegexRaw:
+          pattern: SCHEMA_REGISTRY_MASTER_ELIGIBILITY
+
+  - it: stays out of the spelling when the user sets the deprecated key explicitly
+    set:
+      schema_registry.configurationOverrides:
+        master.eligibility: "false"
+    asserts:
+      - notMatchRegexRaw:
+          pattern: SCHEMA_REGISTRY_LEADER_ELIGIBILITY
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SCHEMA_REGISTRY_MASTER_ELIGIBILITY
+            value: "false"
+
+  - it: emits each config key exactly once when an override collides with a managed key
+    set:
+      schema_registry.configurationOverrides:
+        kafkastore.group.id: mine
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SCHEMA_REGISTRY_KAFKASTORE_GROUP_ID
+            value: mine
+          count: 1
+          any: false
+
+  - it: omits SCHEMA_REGISTRY_HEAP_OPTS unless heapOptions is set
+    asserts:
+      - notMatchRegexRaw:
+          pattern: SCHEMA_REGISTRY_HEAP_OPTS
+
+  - it: passes heapOptions through when set
+    set:
+      schema_registry.heapOptions: -Xms512M -Xmx512M
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SCHEMA_REGISTRY_HEAP_OPTS
+            value: -Xms512M -Xmx512M
+
+  - it: runs only the server container by default
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.containers
+          count: 1
+      - equal:
+          path: spec.template.spec.containers[0].name
+          value: cp-schema-registry-server
+      - equal:
+          path: spec.template.metadata.annotations["kubectl.kubernetes.io/default-container"]
+          value: cp-schema-registry-server
+
+  - it: adds the exporter as a second container when enabled
+    set:
+      schema_registry.prometheus.jmx.enabled: true
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.containers
+          count: 2
+      - equal:
+          path: spec.template.spec.containers[1].name
+          value: prometheus-jmx-exporter
+      - equal:
+          path: spec.template.metadata.annotations["prometheus.io/port"]
+          value: "5556"

@@ -1,0 +1,40 @@
+{{- if .Values.schema_registry.tests.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ template "cp-schema-registry.fullname" . }}-test-connection
+  labels:
+{{ include "cp-schema-registry.labels" . | indent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  {{- with .Values.schema_registry.tests.imagePullSecrets }}
+  imagePullSecrets:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  containers:
+    - name: test-connection
+      image: "{{ .Values.schema_registry.tests.image }}:{{ .Values.schema_registry.tests.imageTag }}"
+      imagePullPolicy: "{{ .Values.schema_registry.tests.imagePullPolicy }}"
+      {{- /* /subjects needs the Kafka store to be readable, so this fails when the
+      registry is up but its backing topic is not — which is the failure worth
+      catching. -f turns an HTTP error status into a non-zero exit. */}}
+      args:
+        - -sSf
+        - --max-time
+        - "10"
+        - http://{{ template "cp-schema-registry.fullname" . }}:{{ .Values.schema_registry.servicePort }}/subjects
+      resources:
+{{ toYaml .Values.schema_registry.tests.resources | indent 8 }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        capabilities:
+          drop:
+            - ALL
+        seccompProfile:
+          type: RuntimeDefault
+{{- end }}

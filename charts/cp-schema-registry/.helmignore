@@ -19,3 +19,9 @@
 .project
 .idea/
 *.tmproj
+# Not part of the package: CI fixtures, template unit tests, agent state.
+# Anchored with a leading slash — a bare `tests/` would also drop
+# templates/tests/, i.e. the helm test hook, out of the tarball.
+/ci/
+/tests/
+/.omc/

@@ -148,6 +148,17 @@ schema_registry:
     minAvailable: 1
     maxUnavailable: ""
 
+  ## `helm test` hook. Runs only on `helm test`, never on install or upgrade.
+  ## The image needs nothing but curl; the entrypoint is already curl, so the
+  ## template passes args only.
+  tests:
+    enabled: true
+    image: curlimages/curl
+    imageTag: "8.11.1"
+    imagePullPolicy: IfNotPresent
+    imagePullSecrets: []
+    resources: {}
+
   ## Monitoring
   ## Schema Registry JMX Settings
   ## ref: https://docs.confluent.io/current/schema-registry/docs/monitoring.html
