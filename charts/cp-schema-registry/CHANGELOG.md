@@ -9,6 +9,46 @@ no upstream changelog to keep alongside this one.
 
 Each release is tagged in git as `cp-schema-registry-<version>`.
 
+## 1.2.0
+
+Nothing here is on by default; a release that does not set these renders exactly what
+1.1.0 did.
+
+- **`topologySpreadConstraints`.** A pass-through, empty by default. The chart already
+  had `affinity` and a PodDisruptionBudget, but without a spread three replicas can land
+  on one node — and then the budget protects nothing against a drain of it. Both keys
+  stay: a pod spec can carry both, and they answer different questions ("roughly
+  balanced across zones" versus "never two on one node").
+
+- **`networkPolicy`.** Off by default, because a policy that is wrong takes the release
+  down and reads like a Schema Registry fault. Enabling it writes an *ingress* policy —
+  the REST port, the exporter port when `metrics.enabled`, nothing else — which cannot
+  break the pod's own outbound traffic.
+
+  Egress is a second switch, because adding `Egress` to `policyTypes` denies everything
+  the rules do not name, Kafka included, and the chart cannot locate Kafka for you:
+  `kafka.bootstrapServers` is a hostname string, not a selector or a CIDR. `allowDNS` is
+  on by default — an egress policy without DNS cannot resolve the bootstrap servers, and
+  that failure looks like a Kafka outage.
+
+- **`metrics.mode`.** `sidecar` (default, unchanged) or `native`, which moves the
+  exporter to an init container with `restartPolicy: Always` — a Kubernetes sidecar
+  container, started before the main container and stopped after it, instead of racing
+  it in both directions. **Needs Kubernetes 1.29+.** Below that the API server drops the
+  unknown field and the exporter becomes an init container that never exits, so the pod
+  hangs in `Init:0/1` with nothing in the events to explain it. The chart cannot check
+  this for you — reading the cluster version at render time makes `helm template` and a
+  server-side GitOps render disagree — so it is a deliberate value.
+
+  The exporter container is now defined once, in a helper, and rendered into either
+  position.
+
+- **README: a Kubernetes version table.** Which values need which version, and what to
+  use instead below it — `matchLabelKeys` and `minDomains` inside spread constraints
+  (1.27/1.30), `metrics.mode: native` (1.29), `endPort` in network policy rules (1.25),
+  Gateway API CRDs (1.23/1.25). The chart's floor is 1.22 and everything it renders by
+  default works there; this is for the things you switch on.
+
 ## 1.1.0
 
 - **ServiceMonitor, PodMonitor and PrometheusRule** under `metrics`, all off by default.

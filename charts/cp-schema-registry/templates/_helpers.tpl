@@ -182,6 +182,47 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 
 
 {{/*
+The JMX exporter container.
+
+Rendered either as an ordinary container or, with `metrics.mode: native`, as an init
+container carrying restartPolicy: Always — a Kubernetes sidecar container, which is
+started before the main container and stopped after it. Same container either way, so
+it lives here instead of being written twice.
+
+    {{ include "cp-schema-registry.exporterContainer" (list . $native) | indent 8 }}
+*/}}
+{{- define "cp-schema-registry.exporterContainer" -}}
+{{- $ctx := index . 0 -}}
+{{- $native := index . 1 -}}
+{{- $v := include "cp-schema-registry.values" $ctx | fromYaml -}}
+- name: prometheus-jmx-exporter
+  image: "{{ $v.metrics.image.repository }}:{{ $v.metrics.image.tag }}"
+  imagePullPolicy: "{{ $v.metrics.image.pullPolicy }}"
+{{- if $native }}
+  restartPolicy: Always
+{{- end }}
+  {{- /* The image entrypoint is `java -jar jmx_prometheus_standalone.jar`, so
+  only args are passed. The command this replaced carried
+  -XX:+UseCGroupMemoryLimitForHeap and -XX:MaxRAMFraction=1, which JDK 11
+  removed; they only worked because that image was JDK 8. */}}
+  args:
+  - {{ $v.metrics.port | quote }}
+  - /etc/jmx-schema-registry/jmx-schema-registry-prometheus.yml
+  ports:
+  - containerPort: {{ $v.metrics.port }}
+    name: {{ include "cp-schema-registry.metricsPortName" $ctx }}
+  resources:
+{{ toYaml $v.metrics.resources | indent 4 }}
+  volumeMounts:
+  - name: jmx-config
+    mountPath: /etc/jmx-schema-registry
+{{- with $v.metrics.securityContext }}
+  securityContext:
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Object labels plus caller-supplied ones, merged rather than concatenated.
 
 Appending a second block of labels emits a duplicate YAML key whenever the two sets

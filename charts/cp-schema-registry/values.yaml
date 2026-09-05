@@ -166,6 +166,59 @@ tolerations: []
 ## Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#affinity-and-anti-affinity
 affinity: {}
 
+## Spread replicas across zones or nodes. Pure pass-through, empty by default.
+## The field itself is GA since Kubernetes 1.19, so it works on this chart's 1.22
+## floor — but minDomains, matchLabelKeys, nodeAffinityPolicy and nodeTaintsPolicy
+## inside it are newer (1.27-1.30). See "Kubernetes versions" in the README.
+## Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/
+topologySpreadConstraints: []
+  # - maxSkew: 1
+  #   topologyKey: topology.kubernetes.io/zone
+  #   whenUnsatisfiable: ScheduleAnyway
+  #   labelSelector:
+  #     matchLabels:
+  #       app: cp-schema-registry
+  #       release: my-release
+
+## NetworkPolicy. Off by default, because a policy that is wrong is worse than none:
+## it takes the release down and looks like a Schema Registry fault.
+##
+## Enabling it writes an *ingress* policy only. That already helps — everything except
+## the ports below is closed — and it cannot break the pod's own outbound traffic.
+## Egress is opt-in on top, because the chart cannot infer where Kafka is:
+## `kafka.bootstrapServers` is a hostname string, not a selector or a CIDR.
+networkPolicy:
+  enabled: false
+  ingress:
+    ## Who may reach the REST API, and the exporter port when metrics.enabled.
+    ## Empty means any pod in the cluster — still narrower than no policy, since
+    ## every other port is closed.
+    from: []
+      # - namespaceSelector:
+      #     matchLabels:
+      #       kubernetes.io/metadata.name: my-apps
+      # - podSelector:
+      #     matchLabels:
+      #       app.kubernetes.io/name: my-producer
+    ## Extra ingress rules, passed through as written.
+    extraRules: []
+  egress:
+    ## Opt-in. Turning this on adds Egress to policyTypes, which denies every
+    ## outbound connection the rules below do not allow — including Kafka.
+    enabled: false
+    ## UDP and TCP 53 to anywhere. Forgetting DNS is the classic way to break a
+    ## release with an egress policy.
+    allowDNS: true
+    ## Egress rules, passed through as written. Kafka goes here.
+    rules: []
+      # - to:
+      #     - podSelector:
+      #         matchLabels:
+      #           app.kubernetes.io/name: kafka
+      #   ports:
+      #     - port: 9092
+      #       protocol: TCP
+
 ## Pod-level security context. Was `securityContext` before 1.0.0, renamed so it
 ## cannot be confused with the container-level one below.
 ## https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
@@ -234,6 +287,22 @@ metrics:
   ## which a Prometheus Operator setup ignores. Turn it on only once something
   ## is actually configured to scrape the exporter port.
   enabled: false
+  ## How the exporter runs alongside Schema Registry.
+  ##
+  ##   sidecar  an ordinary container. Works on every supported Kubernetes, including
+  ##            this chart's 1.22 floor. No ordering guarantee: the exporter can start
+  ##            before JMX is listening and log connection errors, and on shutdown it
+  ##            can outlive or predecease the thing it scrapes.
+  ##   native   an init container with restartPolicy: Always — a Kubernetes sidecar
+  ##            container, started before the main container and stopped after it.
+  ##            Needs Kubernetes >= 1.29 (beta) / 1.33 (GA).
+  ##
+  ## Do not set `native` below 1.29: the API server drops the unknown restartPolicy
+  ## field, the exporter becomes an ordinary init container that never exits, and the
+  ## pod never starts. That failure is silent, which is why this is a value and not
+  ## something the chart guesses from the cluster.
+  mode: sidecar
+
   ## Built from https://github.com/shepherd44/containers (jmx_prometheus_standalone).
   ## The image's entrypoint is the jar, so the deployment passes only args.
   ## Swapping this for another image means matching that contract.

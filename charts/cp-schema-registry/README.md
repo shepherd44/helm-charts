@@ -29,7 +29,7 @@ carries its `LICENSE` verbatim, recovered from a surviving fork. Local changes a
 
 | | |
 |---|---|
-| Chart | `1.1.0` |
+| Chart | `1.2.0` |
 | Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
 
 Confluent supports each Community release for two years from its minor release date.
@@ -40,6 +40,45 @@ Confluent supports each Community release for two years from its minor release d
   Registry version to pin, the support lifecycle, and what actually differs between them
 
 The JMX exporter sidecar is **off by default** — see [Metrics](#metrics).
+
+## Kubernetes versions
+
+The chart installs on **1.22 and up** — that is the `kubeVersion` in `Chart.yaml`, and
+Helm refuses anything older. Everything the chart renders by default exists in 1.22.
+
+Some values reach for fields that arrived later. They are all off by default, so a 1.22
+cluster is never broken by leaving them alone; the table is for when you turn one on.
+
+| Value | Needs | On 1.22, use instead |
+|---|---|---|
+| `topologySpreadConstraints` (the field itself) | 1.19 | works as-is |
+| ├ `matchLabelKeys` inside it | 1.27 beta, 1.34 GA | spell the `labelSelector` out |
+| ├ `minDomains` inside it | 1.27 beta, 1.30 GA | `affinity` with required pod anti-affinity |
+| └ `nodeAffinityPolicy`, `nodeTaintsPolicy` | 1.26/1.27 beta, 1.30 GA | the defaults (`Honor`, `Ignore`) are what 1.22 does anyway |
+| `metrics.mode: native` | 1.29 beta, 1.33 GA | `metrics.mode: sidecar`, the default |
+| `networkPolicy` | 1.7 | works as-is — but do not put `endPort` in `extraRules`, that needs 1.25 |
+| `ingress` | 1.19 (`networking.k8s.io/v1`) | works as-is |
+| `podDisruptionBudget` | 1.21 (`policy/v1`) | works as-is |
+| `metrics.serviceMonitor`, `podMonitor`, `prometheusRule` | not a Kubernetes version question | whatever the Prometheus Operator running there supports |
+
+Two of those deserve a warning rather than a row.
+
+**`metrics.mode: native` fails silently below 1.29.** There is no `restartPolicy` field
+on an init container in 1.22; the API server drops what it does not know, the exporter
+becomes an ordinary init container that never exits, and the pod hangs in `Init:0/1`
+forever with nothing in the events to explain it. The chart cannot check this for you —
+reading the cluster version at render time makes `helm template` and a server-side
+GitOps render disagree — so it is a value you set deliberately.
+
+**`kubeVersion` is checked by Helm, not by the cluster.** `helm template --kube-version`
+and a cluster's real version both satisfy it, so a chart that renders is not proof that
+every field in it is understood where it lands. That is what the table is for.
+
+### Helm
+
+Helm 3.14+ and Helm 4 both work; CI renders the chart with both. Helm's own support
+policy covers the Kubernetes versions its binary was built against plus three behind, so
+a 1.22 cluster sits outside what Helm 4 tests — on clusters that old, prefer Helm 3.
 
 ## Upgrading to 1.0.0
 
@@ -76,7 +115,7 @@ should follow, and the list is about to grow.
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 1.1.0 \
+  --version 1.2.0 \
   --set kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
@@ -87,7 +126,7 @@ With a values file:
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 1.1.0 -f my-values.yaml
+  --version 1.2.0 -f my-values.yaml
 ```
 
 ```yaml
@@ -273,6 +312,70 @@ standard `app.kubernetes.io/*` set. The Deployment's `spec.selector` still uses 
 legacy pair, on purpose: a selector is immutable, so changing it would break
 `helm upgrade` on every existing release.
 
+## Network policy
+
+`networkPolicy.enabled` writes an **ingress** policy: the REST port, plus the exporter
+port when `metrics.enabled`, and nothing else. That is safe to turn on — it cannot break
+the pod's own outbound traffic — and it closes every other port on the pod.
+
+```yaml
+networkPolicy:
+  enabled: true
+  ingress:
+    from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: my-apps
+```
+
+Leaving `from` empty allows any pod in the cluster on those ports, which is still
+narrower than having no policy.
+
+Egress is a **separate switch**, because adding `Egress` to `policyTypes` denies every
+outbound connection the rules do not name — including Kafka, which the chart cannot
+locate for you: `kafka.bootstrapServers` is a hostname string, not a selector or a CIDR.
+
+```yaml
+networkPolicy:
+  egress:
+    enabled: true
+    allowDNS: true          # 53/udp and 53/tcp; leave this on
+    rules:
+      - to:
+          - podSelector:
+              matchLabels:
+                app.kubernetes.io/name: kafka
+        ports:
+          - port: 9092
+            protocol: TCP
+```
+
+`allowDNS` is on by default and worth leaving there: the bootstrap servers are resolved
+by name, so an egress policy without DNS takes the release down in a way that reads like
+a Kafka outage.
+
+## Spreading replicas
+
+`affinity` and `topologySpreadConstraints` are both pass-throughs and both empty by
+default. They are not alternatives — a pod spec can carry both.
+
+```yaml
+replicaCount: 3
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app: cp-schema-registry
+        release: my-release
+```
+
+Reach for spread constraints when the goal is "roughly balanced across zones", and for
+required pod anti-affinity when the goal is "never two on one node". Worth pairing with
+`podDisruptionBudget`: without a spread, three replicas can land on one node and the
+budget protects nothing against a drain of it.
+
 ## Credentials
 
 `configurationOverrides` renders every value literally into the Deployment:
@@ -340,6 +443,19 @@ worth nothing until something scrapes it.
 ```console
 --set metrics.enabled=true
 ```
+
+### How it runs in the pod
+
+`metrics.mode` decides whether the exporter is an ordinary container or a Kubernetes
+sidecar container:
+
+- `sidecar` (default) — a normal container. No ordering guarantee: it can start before
+  JMX is listening and log connection errors on every pod start, and on shutdown it can
+  outlive or predecease the thing it scrapes.
+- `native` — an init container with `restartPolicy: Always`, started before the main
+  container and stopped after it. **Needs Kubernetes 1.29 or newer.** Below that the
+  field is dropped and the pod never finishes starting; see
+  [Kubernetes versions](#kubernetes-versions).
 
 ### Getting it scraped
 
@@ -467,6 +583,12 @@ carry extra values through wrappers — and strict inside the maps the chart own
 | `podDisruptionBudget.enabled` | Create a PodDisruptionBudget | `false` |
 | `podDisruptionBudget.minAvailable` | Minimum available pods | `1` |
 | `podDisruptionBudget.maxUnavailable` | Maximum unavailable pods | `""` |
+| `networkPolicy.enabled` | Create a NetworkPolicy (ingress rules) | `false` |
+| `networkPolicy.ingress.from` | Allowed sources; empty means any pod in the cluster | `[]` |
+| `networkPolicy.ingress.extraRules` | Extra ingress rules, passed through | `[]` |
+| `networkPolicy.egress.enabled` | Also restrict outbound traffic | `false` |
+| `networkPolicy.egress.allowDNS` | Allow 53/udp and 53/tcp | `true` |
+| `networkPolicy.egress.rules` | Egress rules, passed through — Kafka goes here | `[]` |
 | `ingress.enabled` | Create an Ingress | `false` |
 | `ingress.name` | Ingress name; defaults to the chart fullname | `""` |
 | `ingress.className` | `spec.ingressClassName` | `""` |
@@ -480,6 +602,7 @@ carry extra values through wrappers — and strict inside the maps the chart own
 | `nodeSelector` | Node selector | `{}` |
 | `tolerations` | Tolerations | `[]` |
 | `affinity` | Affinity | `{}` |
+| `topologySpreadConstraints` | Spread replicas across zones or nodes | `[]` |
 | `podSecurityContext.runAsUser` | Container UID | `1000` |
 | `podSecurityContext.runAsGroup` | Container GID | `1000` |
 | `podSecurityContext.fsGroup` | Supplementary GID | `1000` |
@@ -505,6 +628,7 @@ carry extra values through wrappers — and strict inside the maps the chart own
 | `tests.resources` | Test hook requests and limits | `{}` |
 | `tests.securityContext` | Test hook security context | numeric UID/GID `100`, non-root |
 | `metrics.enabled` | Run the JMX exporter as a sidecar | `false` |
+| `metrics.mode` | `sidecar`, or `native` for a Kubernetes sidecar container (needs k8s 1.29+) | `sidecar` |
 | `metrics.image.repository` | Exporter image | `shepherd9664/jmx-exporter` |
 | `metrics.image.tag` | Exporter image tag | `1.6.0-latest` |
 | `metrics.image.pullPolicy` | Exporter pull policy | `IfNotPresent` |
