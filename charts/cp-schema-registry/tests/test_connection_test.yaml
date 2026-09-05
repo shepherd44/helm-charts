@@ -15,6 +15,14 @@ tests:
       - contains:
           path: spec.containers[0].args
           content: http://t-cp-schema-registry:8081/subjects
+      # A named user (curl_user) is unverifiable against runAsNonRoot; the kubelet
+      # refuses the container outright, so this has to stay numeric.
+      - equal:
+          path: spec.containers[0].securityContext.runAsUser
+          value: 100
+      - equal:
+          path: spec.containers[0].securityContext.runAsNonRoot
+          value: true
 
   - it: can be turned off for air-gapped installs
     set:

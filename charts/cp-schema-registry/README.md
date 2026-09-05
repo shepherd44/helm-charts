@@ -338,6 +338,7 @@ helm install my-schema-registry shepherd44/cp-schema-registry \
 | `schema_registry.tests.imagePullPolicy` | Test hook pull policy | `IfNotPresent` |
 | `schema_registry.tests.imagePullSecrets` | Test hook pull secrets | `[]` |
 | `schema_registry.tests.resources` | Test hook requests and limits | `{}` |
+| `schema_registry.tests.securityContext` | Test hook security context | numeric UID/GID `100`, non-root |
 | `schema_registry.prometheus.jmx.enabled` | Run the JMX exporter as a sidecar | `false` |
 | `schema_registry.prometheus.jmx.image` | Exporter image | `shepherd9664/jmx-exporter` |
 | `schema_registry.prometheus.jmx.imageTag` | Exporter image tag | `1.6.0-latest` |

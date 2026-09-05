@@ -159,6 +159,22 @@ schema_registry:
     imagePullSecrets: []
     resources: {}
 
+    ## runAsUser has to be numeric: curlimages/curl declares USER curl_user, and a
+    ## kubelet cannot verify a *named* user against runAsNonRoot — it refuses to start
+    ## the container with CreateContainerConfigError instead. 100 is curl_user's uid.
+    ## Change it together with `image` if you point this at a mirror.
+    securityContext:
+      runAsUser: 100
+      runAsGroup: 100
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+
   ## Monitoring
   ## Schema Registry JMX Settings
   ## ref: https://docs.confluent.io/current/schema-registry/docs/monitoring.html
