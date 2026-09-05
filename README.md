@@ -199,8 +199,14 @@ base, and publish as the next number in our line.
 
 ## License
 
-`mongodb-sharded` and `common` are forks of
-[bitnami/charts](https://github.com/bitnami/charts), Apache-2.0. Each chart directory
-keeps upstream's `LICENSE.md`, and the fork notice at the top of the chart's README
-records the base version, the base commit, and every local change — which is what
-Apache-2.0 section 4(b) asks for.
+Every chart here is a fork, and all of them are Apache-2.0.
+
+`mongodb-sharded` and `common` come from
+[bitnami/charts](https://github.com/bitnami/charts). `cp-schema-registry` comes from
+`confluentinc/cp-helm-charts`, a repository since deleted from GitHub; its `LICENSE` is
+kept in the chart directory, recovered verbatim from a surviving fork, because upstream
+shipped no per-chart copy.
+
+Each chart directory keeps upstream's license file, and the fork notice at the top of the
+chart's README records the base version, the base commit, and every local change — which
+is what Apache-2.0 section 4(b) asks for.

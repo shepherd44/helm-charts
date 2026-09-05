@@ -44,7 +44,10 @@ Fixes:
   `SCHEMA_REGISTRY_OPTS` from it and the README documented it, but the key was missing
   from the values file, so it was invisible to anyone reading it.
 
-Metadata: `home`, `maintainers` and Artifact Hub annotations in `Chart.yaml`. `images`
+Metadata: `home`, `maintainers` and Artifact Hub annotations in `Chart.yaml`, and a
+`LICENSE.md` — upstream shipped no per-chart license file, so this carries
+`confluentinc/cp-helm-charts`' `LICENSE` verbatim, recovered from a surviving fork after
+the original repository was deleted. `images`
 there is documentation for this chart — it bundles no `common` library, so nothing
 enforces it — but it is what an installer reads, so it tracks `values.yaml`.
 
