@@ -1,0 +1,39 @@
+suite: service
+templates:
+  - service.yaml
+release:
+  name: t
+tests:
+  - it: exposes only the REST port by default
+    asserts:
+      - lengthEqual:
+          path: spec.ports
+          count: 1
+      - equal:
+          path: spec.ports[0].name
+          value: schema-registry
+      - equal:
+          path: spec.ports[0].port
+          value: 8081
+
+  - it: exposes a named metrics port when the exporter is enabled
+    set:
+      schema_registry.prometheus.jmx.enabled: true
+    asserts:
+      - lengthEqual:
+          path: spec.ports
+          count: 2
+      - equal:
+          path: spec.ports[1].name
+          value: metrics
+      - equal:
+          path: spec.ports[1].port
+          value: 5556
+
+  - it: selects on the immutable legacy label pair only
+    asserts:
+      - equal:
+          path: spec.selector
+          value:
+            app: cp-schema-registry
+            release: t

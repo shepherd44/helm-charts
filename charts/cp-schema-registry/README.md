@@ -7,8 +7,11 @@ This chart bootstraps a deployment of a Confluent Schema Registry
 
 ## Prerequisites
 
-* Kubernetes 1.9.2+
-* Helm 3.0.2+
+* Kubernetes 1.22+ — declared as `kubeVersion` in `Chart.yaml`, so Helm refuses to
+  install below it. 1.22 is well past upstream EOL (October 2022) and is supported here
+  deliberately, for legacy clusters. Nothing the chart emits needs anything newer.
+* Helm 3.14+ or Helm 4. CI renders the chart with both. On a 1.22-era cluster prefer
+  Helm 3: Helm 4 is only supported against the Kubernetes versions it was built for.
 * A healthy and accessible Kafka Cluster
 
 ## Docker Image Source
@@ -19,7 +22,7 @@ This chart bootstraps a deployment of a Confluent Schema Registry
 
 | | |
 |---|---|
-| Chart | `0.5.0` |
+| Chart | `0.6.0` |
 | Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
 
 Confluent supports each Community release for two years from its minor release date.
@@ -37,7 +40,7 @@ The JMX exporter sidecar is **off by default** — see [Metrics](#metrics).
 helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
 helm repo update shepherd44
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.5.0 \
+  --version 0.6.0 \
   --set schema_registry.kafka.bootstrapServers="PLAINTEXT://my-kafka-headless:9092"
 ```
 
@@ -48,7 +51,7 @@ With a values file:
 
 ```console
 helm install my-schema-registry shepherd44/cp-schema-registry \
-  --version 0.5.0 -f my-values.yaml
+  --version 0.6.0 -f my-values.yaml
 ```
 
 ```yaml
@@ -214,6 +217,27 @@ standard `app.kubernetes.io/*` set. The Deployment's `spec.selector` still uses 
 legacy pair, on purpose: a selector is immutable, so changing it would break
 `helm upgrade` on every existing release.
 
+## Verify a release
+
+The chart ships a `helm test` hook — a pod that curls `/subjects` on the release's own
+Service:
+
+```console
+helm test my-schema-registry
+```
+
+`/subjects` needs the Kafka store to be readable, so it fails when the registry is up but
+its backing topic is not, which is the failure worth catching. It proves three things
+`helm install` alone does not: the Service selector matches the pods, the port name
+resolves, and the Kafka store is reachable.
+
+The hook runs only on `helm test`, never on install or upgrade. Set
+`schema_registry.tests.enabled=false` to leave it out of the release entirely, or point
+`schema_registry.tests.image` at a mirror if `curlimages/curl` is not pullable.
+
+CI runs it automatically: `ct install` installs each `ci/*-values.yaml` on a KinD cluster
+and then runs `helm test` against it.
+
 ## Metrics
 
 `schema_registry.prometheus.jmx.enabled` runs a JMX exporter sidecar on port 5556. It is
@@ -308,6 +332,12 @@ helm install my-schema-registry shepherd44/cp-schema-registry \
 | `schema_registry.securityContext.fsGroup` | Supplementary GID | `1000` |
 | `schema_registry.securityContext.runAsNonRoot` | Refuse to run as root | `true` |
 | `schema_registry.jmx.port` | JMX port | `5555` |
+| `schema_registry.tests.enabled` | Render the `helm test` hook | `true` |
+| `schema_registry.tests.image` | Test hook image (needs curl) | `curlimages/curl` |
+| `schema_registry.tests.imageTag` | Test hook image tag | `8.11.1` |
+| `schema_registry.tests.imagePullPolicy` | Test hook pull policy | `IfNotPresent` |
+| `schema_registry.tests.imagePullSecrets` | Test hook pull secrets | `[]` |
+| `schema_registry.tests.resources` | Test hook requests and limits | `{}` |
 | `schema_registry.prometheus.jmx.enabled` | Run the JMX exporter as a sidecar | `false` |
 | `schema_registry.prometheus.jmx.image` | Exporter image | `shepherd9664/jmx-exporter` |
 | `schema_registry.prometheus.jmx.imageTag` | Exporter image tag | `1.6.0-latest` |
