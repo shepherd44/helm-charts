@@ -31,9 +31,14 @@ carries its `LICENSE` verbatim, recovered from a surviving fork.
 
 ## Prerequisites
 
-* Kubernetes 1.9.2+
-* Helm 2.8.2+
-* A healthy and accessible Kafka Cluster
+* Kubernetes 1.22+ — declared as `kubeVersion` in `Chart.yaml`, so Helm refuses to
+  install below it. 1.22 is well past upstream EOL (October 2022) and is supported here
+  deliberately, for legacy clusters. Nothing the chart emits needs anything newer.
+* Helm 3.14+ or Helm 4. CI renders the chart with both. On a 1.22-era cluster prefer
+  Helm 3: Helm 4 is only supported against the Kubernetes versions it was built for.
+* A healthy and accessible Kafka cluster, and a Schema Registry if any query uses Avro,
+  Protobuf or JSON Schema. Neither has a usable default — see `kafka.bootstrapServers`
+  and `cp-schema-registry.url` below.
 
 ## Developing Environment
 

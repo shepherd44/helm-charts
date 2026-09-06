@@ -1,0 +1,51 @@
+suite: configmaps
+release:
+  name: t
+tests:
+  - it: writes a JMX exporter config naming the ksqlDB query stats bean
+    templates:
+      - jmx-configmap.yaml
+    asserts:
+      - equal:
+          path: metadata.name
+          value: t-cp-ksql-server-jmx-configmap
+      - matchRegex:
+          path: data["jmx-ksql-server-prometheus.yml"]
+          pattern: io\.confluent\.ksql\.metrics:type=ksql-engine-query-stats
+      - matchRegex:
+          path: data["jmx-ksql-server-prometheus.yml"]
+          pattern: rmi://localhost:5555/jmxrmi
+
+  - it: drops the JMX config when the exporter is off
+    templates:
+      - jmx-configmap.yaml
+    set:
+      prometheus.jmx.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  # The Deployment only mounts this in headless mode, but the ConfigMap itself is
+  # ungated, so every interactive deployment carries a copy of it for nothing. Both of
+  # the k8s-idc namespaces run `ksql.headless: false` and both have it.
+  - it: renders the queries ConfigMap even when headless mode is off
+    templates:
+      - ksql-queries-configmap.yaml
+    set:
+      ksql.headless: false
+    asserts:
+      - equal:
+          path: metadata.name
+          value: t-cp-ksql-server-ksql-queries-configmap
+      - isNotNull:
+          path: data["queries.sql"]
+
+  # queries.sql is upstream's `pageviews`/`users` walkthrough, shipped as an example and
+  # never replaced. Anything actually using headless mode has to override the file.
+  - it: still ships upstream's tutorial SQL as the queries file
+    templates:
+      - ksql-queries-configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["queries.sql"]
+          pattern: CREATE STREAM pageviews_original

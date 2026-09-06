@@ -1,0 +1,67 @@
+suite: services
+release:
+  name: t
+tests:
+  - it: exposes the REST port and the exporter port, which is on by default
+    templates:
+      - service.yaml
+    asserts:
+      - lengthEqual:
+          path: spec.ports
+          count: 2
+      - equal:
+          path: spec.ports[0]
+          value:
+            name: ksql-server
+            port: 8088
+      - equal:
+          path: spec.ports[1]
+          value:
+            name: metrics
+            port: 5556
+
+  - it: exposes only the REST port when the exporter is off
+    templates:
+      - service.yaml
+    set:
+      prometheus.jmx.enabled: false
+    asserts:
+      - lengthEqual:
+          path: spec.ports
+          count: 1
+
+  - it: selects on the label pair the Deployment actually sets
+    templates:
+      - service.yaml
+    asserts:
+      - equal:
+          path: spec.selector
+          value:
+            app: cp-ksql-server
+            release: t
+
+  - it: renders no external Service by default
+    templates:
+      - external-service.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders a LoadBalancer pointing at the REST port when asked
+    templates:
+      - external-service.yaml
+    set:
+      external.enabled: true
+    asserts:
+      - equal:
+          path: metadata.name
+          value: t-cp-ksql-server-external
+      - equal:
+          path: spec.type
+          value: LoadBalancer
+      - equal:
+          path: spec.ports[0]
+          value:
+            name: server-proxy
+            port: 8088
+            targetPort: 8088
