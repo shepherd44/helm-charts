@@ -19,3 +19,8 @@
 .project
 .idea/
 *.tmproj
+# CI inputs, not part of the package. Anchored on purpose: a bare `tests/` would also
+# match templates/tests/, which is where a helm test hook lives, and silently drop it
+# from the tarball.
+/ci/
+/tests/

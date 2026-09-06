@@ -1,0 +1,164 @@
+suite: deployment
+templates:
+  - deployment.yaml
+release:
+  name: t
+tests:
+  - it: names itself after the release and the chart
+    asserts:
+      - equal:
+          path: metadata.name
+          value: t-cp-ksql-server
+      - equal:
+          path: spec.selector.matchLabels
+          value:
+            app: cp-ksql-server
+            release: t
+
+  - it: runs the Confluent image on the pinned appVersion
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].name
+          value: cp-ksql-server
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: confluentinc/cp-ksqldb-server:7.9.0
+
+  # Nothing points these at a real Kafka or Schema Registry by default, so the chart
+  # guesses at sibling releases of the (long gone) cp-kafka and cp-schema-registry
+  # charts. Anyone installing this has to set both.
+  - it: falls back to sibling cp-helm-charts release names
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_BOOTSTRAP_SERVERS
+            value: PLAINTEXT://t-cp-kafka-headless:9092
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_KSQL_SCHEMA_REGISTRY_URL
+            value: http://t-cp-schema-registry:8081
+
+  - it: uses the given Kafka and Schema Registry when they are set
+    set:
+      kafka.bootstrapServers: kafka-cluster-kafka-bootstrap:9092
+      cp-schema-registry.url: http://cp-schema-registry:8081
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_BOOTSTRAP_SERVERS
+            value: kafka-cluster-kafka-bootstrap:9092
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_KSQL_SCHEMA_REGISTRY_URL
+            value: http://cp-schema-registry:8081
+
+  # The service id names every internal topic ksqlDB creates
+  # (_confluent-ksql-<serviceId>_command_topic and the query state stores), so changing
+  # it on a running deployment orphans all of them.
+  - it: takes the service id from values
+    set:
+      serviceId: ksqldb-dev
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_KSQL_SERVICE_ID
+            value: ksqldb-dev
+
+  - it: mounts the queries file in headless mode, which is the default
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_KSQL_QUERIES_FILE
+            value: /etc/ksql/queries/queries.sql
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: ksql-queries
+            mountPath: /etc/ksql/queries
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_LISTENERS
+            value: http://0.0.0.0:8088
+
+  - it: serves the REST API and sets the topic replication factors when headless is off
+    set:
+      ksql.headless: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_LISTENERS
+            value: http://0.0.0.0:8088
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_KSQL_INTERNAL_TOPIC_REPLICAS
+            value: "3"
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_KSQL_QUERIES_FILE
+            value: /etc/ksql/queries/queries.sql
+
+  # A dotted config key becomes an upper-case underscored variable with a KSQL_ prefix,
+  # which is how the Confluent image turns environment into ksql-server.properties.
+  - it: turns configurationOverrides into KSQL_ environment variables
+    set:
+      configurationOverrides:
+        ksql.streams.producer.retries: "2147483647"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_KSQL_STREAMS_PRODUCER_RETRIES
+            value: "2147483647"
+
+  - it: ships the JMX exporter sidecar and the scrape annotations by default
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.containers
+          count: 2
+      - equal:
+          path: spec.template.spec.containers[1].name
+          value: prometheus-jmx-exporter
+      - equal:
+          path: spec.template.metadata.annotations["prometheus.io/scrape"]
+          value: "true"
+      - equal:
+          path: spec.template.metadata.annotations["prometheus.io/port"]
+          value: "5556"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JMX_PORT
+            value: "5555"
+
+  - it: drops the sidecar, its volume and the annotations when metrics are off
+    set:
+      prometheus.jmx.enabled: false
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.containers
+          count: 1
+      - isNull:
+          path: spec.template.metadata.annotations
+      - notContains:
+          path: spec.template.spec.volumes
+          content:
+            name: jmx-config
+            configMap:
+              name: t-cp-ksql-server-jmx-configmap
+
+  - it: has no probe of any kind
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].livenessProbe
+      - isNull:
+          path: spec.template.spec.containers[0].readinessProbe
