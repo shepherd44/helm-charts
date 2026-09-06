@@ -1,0 +1,61 @@
+# THROWAWAY. Dumps every MBean a running ksqlDB exposes, so the chart's JMX rules can be
+# written against what actually exists rather than against what upstream guessed. Delete
+# this file and the wildcard jmx-configmap once the names are recorded.
+name: ksql-jmx-probe
+
+on:
+  # workflow_dispatch needs the file on the default branch, which this never reaches.
+  pull_request:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.18.4
+      - uses: helm/kind-action@v1
+        with:
+          version: v0.27.0
+          node_image: kindest/node:v1.31.6
+          cluster_name: probe
+
+      - name: Kafka fixture
+        run: |
+          kubectl apply -f .github/ci/kafka.yaml
+          kubectl -n kafka rollout status deployment/kafka --timeout=300s
+
+      - name: Install ksqlDB
+        run: |
+          helm install ksql charts/cp-ksql-server \
+            -f charts/cp-ksql-server/ci/default-values.yaml \
+            --wait --timeout 10m
+          kubectl get pods
+
+      - name: Create a persistent query
+        run: |
+          set -euo pipefail
+          POD=$(kubectl get pod -l app=cp-ksql-server -o jsonpath='{.items[0].metadata.name}')
+          ksql() {
+            kubectl exec "$POD" -c cp-ksql-server -- \
+              curl -sS -X POST http://localhost:8088/ksql \
+                -H 'Content-Type: application/vnd.ksql.v1+json' \
+                -d "{\"ksql\":\"$1\",\"streamsProperties\":{}}"
+          }
+          # A query-stats MBean only exists once something is actually running.
+          ksql "CREATE STREAM src (id VARCHAR KEY, v INT) WITH (kafka_topic='probe_src', value_format='JSON', partitions=1);"
+          echo
+          ksql "CREATE STREAM out AS SELECT id, v FROM src WHERE v > 0 EMIT CHANGES;"
+          echo
+          sleep 30
+          ksql "SHOW QUERIES;"
+          echo
+
+      - name: What the candidate rules actually produce
+        run: |
+          POD=$(kubectl get pod -l app=cp-ksql-server -o jsonpath='{.items[0].metadata.name}')
+          kubectl exec "$POD" -c cp-ksql-server -- curl -sS http://localhost:5556/metrics > /tmp/m.txt
+          echo "===== total series: $(grep -vc '^#' /tmp/m.txt)"
+          echo "===== cp_ksql_server_* with values"
+          grep -E '^cp_ksql_server' /tmp/m.txt | sort || echo "(NONE -- rules still do not match)"

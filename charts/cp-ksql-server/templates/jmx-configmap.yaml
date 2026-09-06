@@ -6,10 +6,6 @@ metadata:
   name: {{ template "cp-ksql-server.fullname" . }}-jmx-configmap
   labels:
 {{ include "cp-ksql-server.mergedLabels" (list . dict) | indent 4 }}
-  {{- with (include "cp-ksql-server.mergedAnnotations" (list . dict)) }}
-  annotations:
-{{ . | indent 4 }}
-  {{- end }}
 data:
   jmx-ksql-server-prometheus.yml: |+
     jmxUrl: service:jmx:rmi:///jndi/rmi://localhost:{{ $v.jmx.port }}/jmxrmi
@@ -17,8 +13,14 @@ data:
     lowercaseOutputLabelNames: true
     ssl: false
     includeObjectNames:
-    - io.confluent.ksql.metrics:type=ksql-engine-query-stats
+    - "io.confluent.ksql.metrics:type=_confluent-ksql-*"
     rules:
-    - pattern : 'io.confluent.ksql.metrics<type=ksql-engine-query-stats>([^:]+):'
-      name: "cp_ksql_server_metrics_$1"
+    - pattern: 'io.confluent.ksql.metrics<type=_confluent-ksql-(.+)ksql-engine-query-stats><>([^:]+):'
+      name: cp_ksql_server_metrics_$2
+      labels:
+        ksql_service_id: "$1"
+    - pattern: 'io.confluent.ksql.metrics<type=_confluent-ksql-(.+)pull-query><>([^:]+):'
+      name: cp_ksql_server_pull_query_$2
+      labels:
+        ksql_service_id: "$1"
 {{- end }}
