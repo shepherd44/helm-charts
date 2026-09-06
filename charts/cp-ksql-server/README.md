@@ -112,12 +112,31 @@ new map — Helm replaces the map with the string, taking the chart's own `tag` 
 | Parameter | Description | Default |
 | --------- | ----------- | ------- |
 | `kafka.bootstrapServers` | Kafka bootstrap servers. No usable default. | `""` |
+| `advertisedListener` | How this server tells the others where to reach it. Empty means the pod IP — see below. | `""` |
 | `schemaRegistry.url` | Schema Registry URL, needed by any query using Avro, Protobuf or JSON Schema. | `""` |
 | `schemaRegistry.nameOverride` | Only used to guess a sibling release's Service name when `url` is empty. | `""` |
 | `configurationOverrides` | ksqlDB [configuration](https://docs.confluent.io/current/ksql/docs/installation/server-config/config-reference.html) as a map. Each key becomes an environment variable: dots to underscores, upper-cased, `KSQL_` prefixed. **Rendered literally into the Deployment**, so anything sensitive belongs in `envFrom` instead. | `{}` |
 | `extraEnv` | Additional environment variables, rendered as written. | `[]` |
 | `envFrom` | Env from existing Secrets or ConfigMaps. Keys must already be spelled the way the image expects, e.g. `KSQL_KSQL_STREAMS_SASL_JAAS_CONFIG`. | `[]` |
 | `extraVolumes`, `extraVolumeMounts` | Extra volumes on the server container — a JKS truststore comes in this way. | `[]` |
+
+#### Why the pod IP
+
+Left empty, the chart sets `ksql.advertised.listener` to `http://$(POD_IP):<service.port>`.
+Without it ksqlDB advertises its own hostname, which for a Deployment pod is not in DNS,
+and every inter-node call fails:
+
+```
+WARN Failed to retrieve info from host: HostInfo{host='<pod-name>', port=8088}
+```
+
+That is not fatal — persistent queries are split across nodes by the Kafka Streams
+consumer group and never use this path — but `SHOW QUERIES` reports the other servers as
+`UNRESPONSIVE` and a pull query cannot be answered from another node's state store. Both
+k8s-idc deployments ran that way for two years.
+
+The variable is `POD_IP`, not `KSQL_POD_IP`: the image turns every `KSQL_*` variable into
+a `ksql-server.properties` entry, and this one exists only to be substituted.
 
 ### Mode and queries
 
@@ -131,10 +150,15 @@ new map — Helm replaces the map with the string, taking the chart's own `tag` 
 
 ### Probes and service links
 
-Both probes call `/info`, not `/healthcheck`: `/healthcheck` reports `commandRunner`
-unhealthy on servers that are running their queries perfectly well — every ksqlDB pod in
-both k8s-idc namespaces answers that way — so a probe reading it would take a working
-deployment out of service. Set either probe to `{}` to omit it.
+Both probes call `/info`, not `/healthcheck`. Both endpoints answer 200 whatever the
+server state, so a probe reading the status code learns nothing from `/healthcheck` that
+`/info` does not say sooner — and a probe reading its body would be reading something
+that goes stale. Every pod in both k8s-idc namespaces reported
+`commandRunner.isHealthy: false` for months while running its queries perfectly well, and
+every one came back `true` on the next restart: the flag had outlived whatever set it. A
+liveness probe on that would have restarted a working fleet in a loop.
+
+Set either probe to `{}` to omit it.
 
 | Parameter | Description | Default |
 | --------- | ----------- | ------- |
@@ -207,10 +231,35 @@ not also discovered twice.
 | `metrics.scrapeAnnotations` | `prometheus.io/scrape` and `prometheus.io/port` on the pod. | `true` |
 | `jmx.port` | Port the JVM exposes JMX on, for the exporter to read. | `5555` |
 
-Metric names come from the rules in the JMX ConfigMap and are unchanged from the chart's
-original exporter: `cp_ksql_server_metrics_*` from
-`io.confluent.ksql.metrics:type=ksql-engine-query-stats`. The config now says
-`includeObjectNames`, which is what jmx_exporter 1.x understands.
+#### What the exporter serves, and what it used to
+
+Until 1.4.0 the exporter served nothing but its own four `jmx_*` metrics — in CI, in dev,
+and in production with four persistent queries running. `jmx_scrape_error` was `0` the
+whole time: the JMX connection was fine, the rules simply matched no bean.
+
+The inherited config looked for `io.confluent.ksql.metrics:type=ksql-engine-query-stats`.
+ksqlDB does not register that. It registers the group with the service id concatenated
+onto the front, no separator:
+
+```
+io.confluent.ksql.metrics:type=_confluent-ksql-<serviceId>ksql-engine-query-stats
+io.confluent.ksql.metrics:type=_confluent-ksql-engine-query-stats
+io.confluent.ksql.metrics:type=_confluent-ksql-<serviceId>pull-query
+```
+
+The rules now match those, and the service id comes out as a `ksql_service_id` label
+rather than being baked into the metric name. What you get:
+
+| | |
+|---|---|
+| `cp_ksql_server_metrics_num_active_queries` | and `num_persistent_queries`, `num_idle_queries` |
+| `cp_ksql_server_metrics_running_queries` | and `error_queries`, `not_running_queries`, `rebalancing_queries`, `pending_error_queries`, `pending_shutdown_queries` |
+| `cp_ksql_server_metrics_messages_consumed_per_sec` | and `messages_produced_per_sec`, `bytes_consumed`, `error_rate`, `liveness_indicator` |
+| `cp_ksql_server_pull_query_*` | pull query request counts, rates and latencies |
+
+The Vert.x internals (`eventbus`, `http_clients`, `event_loop`) that share the same JMX
+domain are deliberately left out: a couple of thousand series describing the HTTP layer,
+none of which say anything about ksqlDB.
 
 #### ServiceMonitor, PodMonitor, PrometheusRule
 

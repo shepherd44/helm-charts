@@ -57,11 +57,13 @@ enableServiceLinks: false
 
 ## Probes. Set either to {} to omit it.
 ##
-## /info, not /healthcheck. /healthcheck reports `commandRunner.isHealthy: false` on
-## servers that are running their queries perfectly well — every ksqlDB pod in both
-## k8s-idc namespaces answers that way right now — so a probe reading it would take a
-## healthy fleet out of service. /info answers 200 once the REST layer is listening,
-## which is what a probe can actually tell you here.
+## /info, not /healthcheck. Both answer 200 whatever the server state, so a probe reading
+## the status code learns nothing from /healthcheck that /info does not say sooner; and a
+## probe reading its body would be reading something that goes stale. Every pod in both
+## k8s-idc namespaces reported `commandRunner.isHealthy: false` for months while running
+## its queries perfectly well, and all of them came back true on the next restart — the
+## flag had outlived whatever set it. A liveness probe on that would have restarted a
+## working fleet in a loop.
 ##
 ## The initial delays are generous on purpose: a server with persistent queries replays
 ## its command topic and rebuilds RocksDB state before it serves, and that is minutes,
@@ -376,6 +378,18 @@ ksql:
 ## bootstrapServers: "PLAINTEXT://dozing-prawn-kafka-headless:9092"
 kafka:
   bootstrapServers: ""
+
+## How this server tells the others in the group where to reach it.
+##
+## Left empty the chart advertises the pod IP, which is the only name that resolves
+## without extra machinery: ksqlDB otherwise advertises its own hostname, and a Deployment
+## pod's name is not in DNS, so every inter-node call fails. That is not fatal — persistent
+## queries are split across nodes by the Kafka Streams consumer group and do not use this
+## path — but `SHOW QUERIES` reports the other servers as UNRESPONSIVE and pull queries
+## cannot be answered from another node's state store.
+##
+## Set a string to override, e.g. a headless Service address if you run one.
+advertisedListener: ""
 
 ## Schema Registry, needed by any query using Avro, Protobuf or JSON Schema.
 ## e.g. url: http://cp-schema-registry:8081

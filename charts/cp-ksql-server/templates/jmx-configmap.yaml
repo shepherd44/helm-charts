@@ -16,9 +16,20 @@ data:
     lowercaseOutputName: true
     lowercaseOutputLabelNames: true
     ssl: false
+    {{- /* ksqlDB registers its metric groups with the service id concatenated onto the
+    front, no separator: _confluent-ksql-<serviceId>ksql-engine-query-stats. The name the
+    chart inherited, type=ksql-engine-query-stats, matches nothing and never has -- the
+    exporter served only its own four jmx_* metrics for as long as this chart existed.
+    Verified against a running server: see the chart README. */}}
     includeObjectNames:
-    - io.confluent.ksql.metrics:type=ksql-engine-query-stats
+    - "io.confluent.ksql.metrics:type=_confluent-ksql-*"
     rules:
-    - pattern : 'io.confluent.ksql.metrics<type=ksql-engine-query-stats>([^:]+):'
-      name: "cp_ksql_server_metrics_$1"
+    - pattern: 'io.confluent.ksql.metrics<type=_confluent-ksql-(.+)ksql-engine-query-stats><>([^:]+):'
+      name: cp_ksql_server_metrics_$2
+      labels:
+        ksql_service_id: "$1"
+    - pattern: 'io.confluent.ksql.metrics<type=_confluent-ksql-(.+)pull-query><>([^:]+):'
+      name: cp_ksql_server_pull_query_$2
+      labels:
+        ksql_service_id: "$1"
 {{- end }}
