@@ -1,15 +1,16 @@
 # Helm Charts
 
-A Helm chart repository, served as static files from GitHub Pages.
+A Helm chart repository, published as signed OCI artifacts to GitHub Container Registry.
 
 | | |
 |---|---|
-| Chart repo URL | `https://shepherd44.github.io/helm-charts/docs` |
-| Index | <https://shepherd44.github.io/helm-charts/docs/index.yaml> |
+| Registry | `oci://ghcr.io/shepherd44/charts` |
+| Signing | keyless cosign, issuer `token.actions.githubusercontent.com` |
 | Source | <https://github.com/shepherd44/helm-charts> |
+| Pages repo (frozen) | `https://shepherd44.github.io/helm-charts/docs` — see below |
 
-There is no marketplace listing — this is a plain Helm HTTP repo, so it is added by URL
-rather than found by name. Nothing needs to be installed on the cluster to use it.
+There is no repo to add and no marketplace listing: an OCI reference is the address.
+Nothing needs to be installed on the cluster to use it.
 
 ## Use
 

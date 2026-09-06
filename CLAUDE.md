@@ -1,19 +1,25 @@
 # CLAUDE.md
 
-A Helm chart repository served as a static chart repo from GitHub Pages. `README.md` is
-the human-facing document; this file is the part an agent gets wrong without being told.
+A Helm chart repository published as signed OCI artifacts to GHCR. `README.md` is the
+human-facing document; this file is the part an agent gets wrong without being told.
 
 ## Layout
 
 ```
 charts/<name>/     chart sources — the thing you edit
 charts/common/     bitnami library chart, dependency only, never published on its own
-docs/              the published chart repo: *.tgz + index.yaml + index.html
+docs/              the retired GitHub Pages repo, frozen — read Rules before touching it
 ```
 
-GitHub Pages serves the repo root of `main` (legacy Jekyll build, no workflow), so
-`docs/` is live a minute or two after a push. `docs/` is a build output that is
-committed on purpose — do not gitignore it, and do not hand-edit `index.yaml`.
+**Charts are published to `oci://ghcr.io/<owner>/charts` and nowhere else.** Nothing here
+is packaged by hand: pushing a git tag `<chart>-<version>` runs `release-oci.yaml`, which
+packages the chart, pushes it to GHCR, signs it with keyless cosign, and verifies the
+signature before it finishes. The tag is the release; there is no publish step to run
+locally and no artifact to commit.
+
+`docs/` was that channel until `cp-schema-registry` 1.3.0 and is now frozen. Do not add to
+it, do not regenerate `index.yaml`, do not delete what is there — pinned installs still
+resolve against it. Everything about editing it is under Rules.
 
 ## Work in a worktree
 
@@ -54,8 +60,10 @@ git branch -d "$BR"
 git worktree list          # confirm only the primary checkout remains
 ```
 
-Package and index inside the worktree, so `docs/` and the chart change land in one
-commit. Publishing still only happens once that commit reaches `main`.
+Nothing is packaged in the worktree. A chart change is source only — bump
+`Chart.yaml`'s `version`, merge, then push the `<chart>-<version>` tag and let
+`release-oci.yaml` build and sign the artifact. The tag has to be pushed from a commit on
+`main`, and the workflow refuses if the tag's version and `Chart.yaml` disagree.
 
 ## Rules
 
@@ -191,5 +199,17 @@ and is never installed**, which is the safe default and also a silent one: leavi
 `INSTALL=true` out does not fail anything, it just means nothing was ever installed. Say
 out loud which of the two a new chart is getting.
 
-After publishing, verify against the live repo rather than the working tree — add the
-Pages URL as a helm repo, `helm pull`, and render the pulled tarball.
+After publishing, verify against what was actually published rather than the working
+tree:
+
+```shell
+helm pull oci://ghcr.io/<owner>/charts/$CHART --version $VERSION
+cosign verify oci://ghcr.io/<owner>/charts/$CHART:$VERSION \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/<owner>/helm-charts/'
+```
+
+Then render the pulled tarball with the values a real deployment uses. The release
+workflow already runs `cosign verify` on the digest it just pushed, so a green run means
+the artifact is signed; repeating it here is about confirming the *tag* resolves to that
+artifact.
