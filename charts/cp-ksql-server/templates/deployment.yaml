@@ -1,65 +1,85 @@
-{{- if .Capabilities.APIVersions.Has "apps/v1" }}
+{{- $v := include "cp-ksql-server.values" . | fromYaml -}}
 apiVersion: apps/v1
-{{- else }}
-apiVersion: apps/v1beta2
-{{- end }}
 kind: Deployment
 metadata:
   name: {{ template "cp-ksql-server.fullname" . }}
   labels:
-    app: {{ template "cp-ksql-server.name" . }}
-    chart: {{ template "cp-ksql-server.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+{{ include "cp-ksql-server.mergedLabels" (list . dict) | indent 4 }}
+  {{- with (include "cp-ksql-server.mergedAnnotations" (list . dict)) }}
+  annotations:
+{{ . | indent 4 }}
+  {{- end }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ $v.replicaCount }}
+  {{- with $v.strategy }}
+  strategy:
+{{ toYaml . | indent 4 }}
+  {{- end }}
   selector:
     matchLabels:
-      app: {{ template "cp-ksql-server.name" . }}
-      release: {{ .Release.Name }}
+{{ include "cp-ksql-server.selectorLabels" . | indent 6 }}
   template:
     metadata:
       labels:
-        app: {{ template "cp-ksql-server.name" . }}
-        release: {{ .Release.Name }}
-      {{- if or .Values.podAnnotations .Values.prometheus.jmx.enabled }}
+{{ include "cp-ksql-server.mergedLabels" (list . $v.podLabels) | indent 8 }}
+      {{- $podAnnotations := deepCopy ($v.podAnnotations | default dict) }}
+      {{- if $v.metrics.enabled }}
+      {{- $_ := set $podAnnotations "prometheus.io/scrape" "true" }}
+      {{- $_ := set $podAnnotations "prometheus.io/port" ($v.metrics.port | toString) }}
+      {{- end }}
+      {{- with (include "cp-ksql-server.mergedAnnotations" (list . $podAnnotations)) }}
       annotations:
-      {{- range $key, $value := .Values.podAnnotations }}
-        {{ $key }}: {{ $value | quote }}
-      {{- end }}
-      {{- if .Values.prometheus.jmx.enabled }}
-        prometheus.io/scrape: "true"
-        prometheus.io/port: {{ .Values.prometheus.jmx.port | quote }}
-      {{- end }}
+{{ . | indent 8 }}
       {{- end }}
     spec:
-      enableServiceLinks: {{ .Values.enableServiceLinks }}
+      serviceAccountName: {{ include "cp-ksql-server.serviceAccountName" . }}
+      automountServiceAccountToken: {{ $v.serviceAccount.automountServiceAccountToken }}
+      enableServiceLinks: {{ $v.enableServiceLinks }}
+      {{- with $v.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with $v.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
+      {{- with $v.podSecurityContext }}
+      securityContext:
+{{ toYaml . | indent 8 }}
+      {{- end }}
       containers:
         - name: {{ template "cp-ksql-server.name" . }}
-          image: "{{ .Values.image }}:{{ .Values.imageTag }}"
-          imagePullPolicy: "{{ .Values.imagePullPolicy }}"
+          image: "{{ $v.image.repository }}:{{ $v.image.tag }}"
+          imagePullPolicy: "{{ $v.image.pullPolicy }}"
+          {{- with $v.containerSecurityContext }}
+          securityContext:
+{{ toYaml . | indent 12 }}
+          {{- end }}
           ports:
             - name: server
-              containerPort: {{ .Values.servicePort}}
+              containerPort: {{ $v.service.port }}
               protocol: TCP
-            {{- if .Values.prometheus.jmx.enabled }}
-            - containerPort: {{ .Values.jmx.port }}
+            {{- if $v.metrics.enabled }}
+            - containerPort: {{ $v.jmx.port }}
               name: jmx
             {{- end }}
-          {{- with .Values.livenessProbe }}
+          {{- with $v.livenessProbe }}
           livenessProbe:
 {{ toYaml . | indent 12 }}
           {{- end }}
-          {{- with .Values.readinessProbe }}
+          {{- with $v.readinessProbe }}
           readinessProbe:
 {{ toYaml . | indent 12 }}
           {{- end }}
           resources:
-{{ toYaml .Values.resources | indent 12 }}
+{{ toYaml $v.resources | indent 12 }}
+          {{- if or $v.ksql.headless $v.extraVolumeMounts }}
           volumeMounts:
-          {{- if .Values.ksql.headless }}
+          {{- if $v.ksql.headless }}
           - name: ksql-queries
             mountPath: /etc/ksql/queries
+          {{- end }}
+          {{- with $v.extraVolumeMounts }}
+{{ toYaml . | indent 10 }}
+          {{- end }}
           {{- end }}
           env:
           - name: KSQL_BOOTSTRAP_SERVERS
@@ -69,32 +89,39 @@ spec:
           - name: KSQL_KSQL_SCHEMA_REGISTRY_URL
             value: {{ template "cp-ksql-server.cp-schema-registry.service-name" . }}
           - name: KSQL_HEAP_OPTS
-            value: "{{ .Values.heapOptions }}"
-          {{- if .Values.ksql.headless }}
+            value: "{{ $v.heapOptions }}"
+          {{- if $v.ksql.headless }}
           - name: KSQL_KSQL_QUERIES_FILE
             value: /etc/ksql/queries/queries.sql
           {{- else }}
           - name: KSQL_KSQL_SINK_REPLICAS
-            value: "{{ .Values.ksql.sinkReplicas }}"
+            value: "{{ $v.ksql.sinkReplicas }}"
           - name: KSQL_KSQL_STREAMS_REPLICATION_FACTOR
-            value: "{{ .Values.ksql.streamsReplicationFactor }}"
+            value: "{{ $v.ksql.streamsReplicationFactor }}"
           - name: KSQL_KSQL_INTERNAL_TOPIC_REPLICAS
-            value: "{{ .Values.ksql.internalTopicReplicas }}"
+            value: "{{ $v.ksql.internalTopicReplicas }}"
           - name: KSQL_LISTENERS
-            value: http://0.0.0.0:8088
+            value: http://0.0.0.0:{{ $v.service.port }}
           {{- end }}
-          {{- range $key, $value := .Values.configurationOverrides }}
+          {{- range $key, $value := $v.configurationOverrides }}
           - name: {{ printf "KSQL_%s" $key | replace "." "_" | upper | quote }}
             value: {{ $value | quote }}
           {{- end }}
-          {{- if .Values.jmx.port }}
+          {{- if $v.jmx.port }}
           - name: JMX_PORT
-            value: "{{ .Values.jmx.port }}"
+            value: "{{ $v.jmx.port }}"
           {{- end }}
-        {{- if .Values.prometheus.jmx.enabled }}
+          {{- with $v.extraEnv }}
+{{ toYaml . | indent 10 }}
+          {{- end }}
+          {{- with $v.envFrom }}
+          envFrom:
+{{ toYaml . | indent 10 }}
+          {{- end }}
+        {{- if $v.metrics.enabled }}
         - name: prometheus-jmx-exporter
-          image: "{{ .Values.prometheus.jmx.image }}:{{ .Values.prometheus.jmx.imageTag }}"
-          imagePullPolicy: "{{ .Values.prometheus.jmx.imagePullPolicy }}"
+          image: "{{ $v.metrics.image.repository }}:{{ $v.metrics.image.tag }}"
+          imagePullPolicy: "{{ $v.metrics.image.pullPolicy }}"
           command:
             - java
             - -XX:+UnlockExperimentalVMOptions
@@ -103,42 +130,54 @@ spec:
             - -XshowSettings:vm
             - -jar
             - jmx_prometheus_httpserver.jar
-            - {{ .Values.prometheus.jmx.port | quote }}
+            - {{ $v.metrics.port | quote }}
             - /etc/jmx-ksql-server/jmx-ksql-server-prometheus.yml
           ports:
-            - containerPort: {{ .Values.prometheus.jmx.port }}
+            - containerPort: {{ $v.metrics.port }}
+              name: {{ include "cp-ksql-server.metricsPortName" . }}
           resources:
-{{ toYaml .Values.prometheus.jmx.resources | indent 12 }}
+{{ toYaml $v.metrics.resources | indent 12 }}
+          {{- with $v.metrics.securityContext }}
+          securityContext:
+{{ toYaml . | indent 12 }}
+          {{- end }}
           volumeMounts:
             - name: jmx-config
               mountPath: /etc/jmx-ksql-server
         {{- end }}
-      {{- if .Values.imagePullSecrets }}
+      {{- with $v.image.pullSecrets }}
       imagePullSecrets:
-{{ toYaml .Values.imagePullSecrets | indent 8 }}
+{{ toYaml . | indent 8 }}
       {{- end }}
-      {{- if or .Values.prometheus.jmx.enabled .Values.ksql.headless }}
+      {{- if or $v.metrics.enabled $v.ksql.headless $v.extraVolumes }}
       volumes:
-      {{- if .Values.prometheus.jmx.enabled }}
+      {{- if $v.metrics.enabled }}
       - name: jmx-config
         configMap:
           name: {{ template "cp-ksql-server.fullname" . }}-jmx-configmap
       {{- end }}
-      {{- if .Values.ksql.headless }}
+      {{- if $v.ksql.headless }}
       - name: ksql-queries
         configMap:
           name: {{ template "cp-ksql-server.fullname" . }}-ksql-queries-configmap
       {{- end }}
+      {{- with $v.extraVolumes }}
+{{ toYaml . | indent 6 }}
       {{- end }}
-      {{- if .Values.nodeSelector }}
+      {{- end }}
+      {{- with $v.nodeSelector }}
       nodeSelector:
-{{ toYaml .Values.nodeSelector | indent 8 }}
+{{ toYaml . | indent 8 }}
       {{- end }}
-      {{- if .Values.tolerations }}
+      {{- with $v.tolerations }}
       tolerations:
-{{ toYaml .Values.tolerations | indent 8 }}
+{{ toYaml . | indent 8 }}
       {{- end }}
-      {{- if .Values.affinity }}
+      {{- with $v.affinity }}
       affinity:
-{{ toYaml .Values.affinity | indent 8 }}
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with $v.topologySpreadConstraints }}
+      topologySpreadConstraints:
+{{ toYaml . | indent 8 }}
       {{- end }}

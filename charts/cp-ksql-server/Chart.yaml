@@ -13,7 +13,7 @@ kubeVersion: ">=1.22.0-0"
 ## 1.0.0, not 0.1.2. Upstream's numbering stopped when confluentinc archived the
 ## repository; 0.1.1 was a local bump made in k8s-manifests and never published anywhere.
 ## This is the first version in this repository's line for the chart.
-version: 1.1.0
+version: 1.2.0
 appVersion: "7.9.9"
 keywords:
   - kafka
@@ -44,13 +44,11 @@ annotations:
     - name: Chart source
       url: https://github.com/shepherd44/helm-charts/tree/main/charts/cp-ksql-server
   artifacthub.io/changes: |
+    - kind: changed
+      description: "Values layout: image is a map, servicePort moved to service.port, prometheus.jmx became metrics, cp-schema-registry became schemaRegistry. The old names still work apart from a bare image string"
     - kind: added
-      description: "Liveness and readiness probes on /info, and a helm test that calls it"
-    - kind: fixed
-      description: "Kubernetes service links are off: their injected variables collide with the image's KSQL_* configuration and stop the server starting"
-    - kind: fixed
-      description: "The queries ConfigMap renders only in headless mode, and its content comes from ksql.queries instead of a file inside the chart"
-    - kind: changed
-      description: "ksql.headless defaults to false, so the chart no longer ships a tutorial as its default workload"
-    - kind: changed
-      description: "ksqlDB 7.9.0 -> 7.9.9"
+      description: "ServiceAccount, PodDisruptionBudget, commonLabels/commonAnnotations and per-resource metadata"
+    - kind: added
+      description: "Pod and container security contexts, topologySpreadConstraints, strategy, priorityClassName, extraEnv, envFrom and extra volumes"
+    - kind: added
+      description: "Standard app.kubernetes.io labels on object metadata; the selector stays the legacy app/release pair because it is immutable"

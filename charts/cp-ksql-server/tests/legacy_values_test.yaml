@@ -1,0 +1,88 @@
+suite: pre-1.2.0 values
+templates:
+  - deployment.yaml
+release:
+  name: t
+tests:
+  - it: maps imageTag and imagePullPolicy onto the image block
+    set:
+      imageTag: 7.9.8
+      imagePullPolicy: Always
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: confluentinc/cp-ksqldb-server:7.9.8
+      - equal:
+          path: spec.template.spec.containers[0].imagePullPolicy
+          value: Always
+
+  - it: maps servicePort onto service.port, listeners included
+    set:
+      servicePort: 9088
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].containerPort
+          value: 9088
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_LISTENERS
+            value: http://0.0.0.0:9088
+
+  - it: maps prometheus.jmx onto metrics
+    set:
+      prometheus:
+        jmx:
+          port: 5599
+          image: example/exporter
+          imageTag: v1
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[1].image
+          value: example/exporter:v1
+      - equal:
+          path: spec.template.metadata.annotations["prometheus.io/port"]
+          value: "5599"
+
+  - it: turns the sidecar off through the old key
+    set:
+      prometheus.jmx.enabled: false
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.containers
+          count: 1
+
+  - it: maps cp-schema-registry.url onto schemaRegistry.url
+    set:
+      cp-schema-registry:
+        url: http://sr.example:8081
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_KSQL_SCHEMA_REGISTRY_URL
+            value: http://sr.example:8081
+
+  # The legacy spelling wins key by key: a values file that still says servicePort is
+  # saying it deliberately, and silently preferring an untouched new-shape default
+  # would change what that file deploys.
+  - it: lets the legacy key win where both are set
+    set:
+      servicePort: 9088
+      service:
+        port: 7088
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_LISTENERS
+            value: http://0.0.0.0:9088
+
+  # A bare string replaces the whole image block, taking the chart's tag and pullPolicy
+  # defaults with it, so there is nothing to merge back from.
+  - it: refuses a bare image string instead of rendering an untagged image
+    set:
+      image: confluentinc/cp-ksqldb-server
+    asserts:
+      - failedTemplate:
+          errorMessage: "image is a map now: set image.repository, and image.tag instead of imageTag. A bare string replaces the whole block, including the tag and pullPolicy defaults."

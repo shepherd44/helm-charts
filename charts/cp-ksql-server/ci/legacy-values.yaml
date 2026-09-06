@@ -1,0 +1,19 @@
+# ct install: the pre-1.2.0 value names, so the mapping is exercised on a real cluster
+# and not only in template tests. Renders the same objects as ci/default-values.yaml.
+servicePort: 8088
+prometheus:
+  jmx:
+    enabled: true
+    port: 5556
+cp-schema-registry:
+  url: http://cp-schema-registry.default.svc.cluster.local:8081
+kafka:
+  bootstrapServers: PLAINTEXT://kafka.kafka.svc.cluster.local:9092
+ksql:
+  sinkReplicas: "1"
+  streamsReplicationFactor: "1"
+  internalTopicReplicas: "1"
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi

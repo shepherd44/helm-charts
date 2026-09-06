@@ -4,26 +4,49 @@
 
 replicaCount: 1
 
+nameOverride: ""
+fullnameOverride: ""
+
+## The ksqlDB service id. It names every internal topic the server owns —
+## _confluent-ksql-<serviceId>_command_topic and the state store topics behind each
+## persistent query — so changing it on a running deployment orphans all of them and
+## starts again from an empty state.
 serviceId: "cp-ksql-server"
 
 ## Image Info
-## ref: https://hub.docker.com/r/confluentinc/cp-ksql-server/
-image: confluentinc/cp-ksqldb-server
-imageTag: 7.9.9
+## ref: https://hub.docker.com/r/confluentinc/cp-ksqldb-server/
+image:
+  repository: confluentinc/cp-ksqldb-server
+  tag: 7.9.9
+  pullPolicy: IfNotPresent
+  ## Secrets must already exist in the namespace.
+  ## ref: https://kubernetes.io/docs/concepts/containers/images/#specifying-imagepullsecrets-on-a-pod
+  pullSecrets: []
 
-## Specify a imagePullPolicy
-## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
-imagePullPolicy: IfNotPresent
-
-## Specify an array of imagePullSecrets.
-## Secrets must be manually created in the namespace.
-## ref: https://kubernetes.io/docs/concepts/containers/images/#specifying-imagepullsecrets-on-a-pod
-imagePullSecrets:
-
-servicePort: 8088
+service:
+  port: 8088
+  labels: {}
+  annotations: {}
 
 ## KSQL JVM Heap Option
+##
+## Only the heap. A ksqlDB server with persistent queries holds most of its memory
+## off-heap in RocksDB, and that grows with the key space of the tables it maintains —
+## the k8s-idc production servers sit around 2.2Gi of working set against a 512M heap,
+## still climbing after ten months. Size `resources.limits.memory` from measurement,
+## not from this number.
 heapOptions: "-Xms512M -Xmx512M"
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #  memory: 4Gi
+  # requests:
+  #  cpu: 200m
+  #  memory: 2Gi
 
 ## Kubernetes publishes a <SERVICE>_PORT style variable into every pod for every Service
 ## in the namespace, and the Confluent image reads KSQL_* out of the environment as
@@ -60,20 +83,77 @@ readinessProbe:
   timeoutSeconds: 5
   failureThreshold: 12
 
-resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #  cpu: 100m
-  #  memory: 128Mi
-  # requests:
-  #  cpu: 100m
-  #  memory: 128Mi
+## Labels and annotations added to every object the chart creates. Per-resource blocks
+## (service.labels, serviceAccount.annotations, and so on) are merged over these and win.
+commonLabels: {}
+commonAnnotations: {}
 
-## Custom pod annotations
+## Labels and annotations on the pod only.
+podLabels: {}
 podAnnotations: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  labels: {}
+  automountServiceAccountToken: false
+
+## Pod-level security context. The Confluent image's own user is appuser, uid 1000.
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  runAsNonRoot: true
+
+## Container-level security context for the ksqlDB container.
+## readOnlyRootFilesystem is deliberately not set: the image writes its generated
+## configuration under the container filesystem, and Kafka Streams keeps its RocksDB
+## state directory under /tmp.
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+## Disabled by default: with replicaCount 1 a budget of minAvailable 1 blocks node
+## drains outright. Enable it alongside replicaCount >= 2.
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  maxUnavailable: ""
+  labels: {}
+  annotations: {}
+
+## Deployment update strategy. Unset means the Kubernetes default rolling update.
+strategy: {}
+  # type: RollingUpdate
+  # rollingUpdate:
+  #   maxUnavailable: 0
+  #   maxSurge: 1
+
+## Additional environment variables on the ksqlDB container, rendered as written.
+## Anything the image should read as configuration is better set through
+## configurationOverrides, which applies the KSQL_ prefix and the name mangling.
+extraEnv: []
+  # - name: JAVA_TOOL_OPTIONS
+  #   value: -XX:MaxRAMPercentage=75
+
+## Env from existing Secrets or ConfigMaps. Use this for anything sensitive — SASL JAAS
+## configuration, truststore and keystore passwords — because configurationOverrides
+## renders its values literally into the Deployment, where `kubectl get deploy -o yaml`
+## and every GitOps diff can read them. Keys must already be spelled the way the image
+## expects, e.g. KSQL_KSQL_STREAMS_SASL_JAAS_CONFIG.
+envFrom: []
+  # - secretRef:
+  #     name: ksql-kafka-credentials
+
+## Extra volumes and mounts on the ksqlDB container. A JKS truststore or keystore comes
+## in this way.
+extraVolumes: []
+extraVolumeMounts: []
 
 ## Node labels for pod assignment
 ## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
@@ -87,27 +167,46 @@ tolerations: []
 ## Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#affinity-and-anti-affinity
 affinity: {}
 
+## Spread replicas across nodes or zones. Available since Kubernetes 1.19, so it is
+## within this chart's 1.22 floor.
+## Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/
+topologySpreadConstraints: []
+  # - maxSkew: 1
+  #   topologyKey: kubernetes.io/hostname
+  #   whenUnsatisfiable: ScheduleAnyway
+  #   labelSelector:
+  #     matchLabels:
+  #       app: cp-ksql-server
+
+priorityClassName: ""
+
+## Time to finish in-flight requests during a rolling update. Unset means the
+## Kubernetes default of 30s.
+terminationGracePeriodSeconds: null
+
 ## Monitoring
 ## JMX Settings
 ## ref: https://docs.confluent.io/current/ksql/docs/operations.html
 jmx:
   port: 5555
 
-## Prometheus Exporter Configuration
-## ref: https://prometheus.io/docs/instrumenting/exporters/
-prometheus:
-  ## JMX Exporter Configuration
-  ## ref: https://github.com/prometheus/jmx_exporter
-  jmx:
-    enabled: true
-    image: solsson/kafka-prometheus-jmx-exporter@sha256
-    imageTag: 6f82e2b0464f50da8104acd7363fb9b995001ddff77d248379f8788e78946143
-    imagePullPolicy: IfNotPresent
-    port: 5556
-
-    ## Resources configuration for the JMX exporter container.
-    ## See the `resources` documentation above for details.
-    resources: {}
+## Prometheus JMX exporter sidecar.
+## ref: https://github.com/prometheus/jmx_exporter
+##
+## On by default, unlike cp-schema-registry, because both live deployments run it and
+## turning it off here would silently drop their metrics on the first upgrade.
+metrics:
+  enabled: true
+  port: 5556
+  image:
+    ## Pinned by digest rather than tag, which is why the repository carries the
+    ## `@sha256` suffix and the tag holds the digest.
+    repository: solsson/kafka-prometheus-jmx-exporter@sha256
+    tag: 6f82e2b0464f50da8104acd7363fb9b995001ddff77d248379f8788e78946143
+    pullPolicy: IfNotPresent
+  ## Resources configuration for the JMX exporter container.
+  resources: {}
+  securityContext: {}
 
 ## External Access
 ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-loadbalancer
@@ -116,6 +215,9 @@ external:
   type: LoadBalancer
   externalTrafficPolicy: Cluster
   port: 8088
+  labels: {}
+  annotations: {}
+  loadBalancerSourceRanges: []
 
 ## Headless mode
 ## ref: https://docs.confluent.io/current/ksql/docs/installation/server-config/index.html
@@ -137,14 +239,17 @@ ksql:
   streamsReplicationFactor: "3"
   internalTopicReplicas: "3"
 
-## You can list load balanced service endpoint, or list of all brokers (which is hard in K8s).  e.g.:
+## You can list a load balanced service endpoint, or a list of all brokers. e.g.:
 ## bootstrapServers: "PLAINTEXT://dozing-prawn-kafka-headless:9092"
 kafka:
   bootstrapServers: ""
 
-## e.g. http://gnoble-panther-cp-schema-registry:8081
-cp-schema-registry:
+## Schema Registry, needed by any query using Avro, Protobuf or JSON Schema.
+## e.g. url: http://cp-schema-registry:8081
+schemaRegistry:
   url: ""
+  ## Only used to guess a sibling release's Service name when url is empty.
+  nameOverride: ""
 
 # KSQL configuration options
 ## ref: https://docs.confluent.io/current/ksql/docs/installation/server-config/config-reference.html

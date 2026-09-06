@@ -1,20 +1,21 @@
+{{- $v := include "cp-ksql-server.values" . | fromYaml -}}
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ template "cp-ksql-server.fullname" . }}
   labels:
-    app: {{ template "cp-ksql-server.name" . }}
-    chart: {{ template "cp-ksql-server.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+{{ include "cp-ksql-server.mergedLabels" (list . $v.service.labels) | indent 4 }}
+  {{- with (include "cp-ksql-server.mergedAnnotations" (list . $v.service.annotations)) }}
+  annotations:
+{{ . | indent 4 }}
+  {{- end }}
 spec:
   ports:
-      - name: ksql-server
-        port: {{ .Values.servicePort }}
-    {{- if .Values.prometheus.jmx.enabled }}
-      - name: metrics
-        port: {{ .Values.prometheus.jmx.port }}
+    - name: ksql-server
+      port: {{ $v.service.port }}
+    {{- if $v.metrics.enabled }}
+    - name: {{ include "cp-ksql-server.metricsPortName" . }}
+      port: {{ $v.metrics.port }}
     {{- end }}
   selector:
-    app: {{ template "cp-ksql-server.name" . }}
-    release: {{ .Release.Name }}
+{{ include "cp-ksql-server.selectorLabels" . | indent 4 }}
