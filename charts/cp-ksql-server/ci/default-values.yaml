@@ -1,0 +1,14 @@
+# ct install: defaults, pointed at the KRaft Kafka the CI workflow deploys.
+#
+# One broker, so the replication factors have to come down from 3 or every internal
+# topic ksqlDB creates fails and the server never becomes ready.
+kafka:
+  bootstrapServers: PLAINTEXT://kafka.kafka.svc.cluster.local:9092
+ksql:
+  sinkReplicas: "1"
+  streamsReplicationFactor: "1"
+  internalTopicReplicas: "1"
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi

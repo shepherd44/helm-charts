@@ -1,0 +1,44 @@
+suite: helm test hook
+templates:
+  - tests/test-connection.yaml
+release:
+  name: t
+tests:
+  - it: curls /info through the Service and fails on a non-2xx
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: test
+      - equal:
+          path: spec.containers[0].args
+          value:
+            - -sSf
+            - --max-time
+            - "10"
+            - http://t-cp-ksql-server:8088/info
+
+  # The image's own user is the name curl_user; a pod with runAsNonRoot and a
+  # non-numeric user is rejected by the kubelet before the container starts.
+  # The Service selects on app plus release; a test pod carrying those labels becomes
+  # one of its own endpoints and the curl can be routed back to itself.
+  - it: stays out of the Service's endpoints
+    asserts:
+      - equal:
+          path: metadata.labels["app"]
+          value: cp-ksql-server-test-connection
+
+  - it: runs as a numeric non-root user
+    asserts:
+      - equal:
+          path: spec.containers[0].securityContext.runAsUser
+          value: 100
+      - equal:
+          path: spec.containers[0].securityContext.runAsNonRoot
+          value: true
+
+  - it: can be switched off
+    set:
+      tests.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0

@@ -22,7 +22,7 @@ tests:
           value: cp-ksql-server
       - equal:
           path: spec.template.spec.containers[0].image
-          value: confluentinc/cp-ksqldb-server:7.9.0
+          value: confluentinc/cp-ksqldb-server:7.9.9
 
   # Nothing points these at a real Kafka or Schema Registry by default, so the chart
   # guesses at sibling releases of the (long gone) cp-kafka and cp-schema-registry
@@ -69,27 +69,7 @@ tests:
             name: KSQL_KSQL_SERVICE_ID
             value: ksqldb-dev
 
-  - it: mounts the queries file in headless mode, which is the default
-    asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: KSQL_KSQL_QUERIES_FILE
-            value: /etc/ksql/queries/queries.sql
-      - contains:
-          path: spec.template.spec.containers[0].volumeMounts
-          content:
-            name: ksql-queries
-            mountPath: /etc/ksql/queries
-      - notContains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: KSQL_LISTENERS
-            value: http://0.0.0.0:8088
-
-  - it: serves the REST API and sets the topic replication factors when headless is off
-    set:
-      ksql.headless: false
+  - it: serves the REST API and sets the topic replication factors by default
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
@@ -106,6 +86,27 @@ tests:
           content:
             name: KSQL_KSQL_QUERIES_FILE
             value: /etc/ksql/queries/queries.sql
+
+  - it: mounts the queries file and stops serving the REST API in headless mode
+    set:
+      ksql.headless: true
+      ksql.queries: "CREATE STREAM s (id INT) WITH (kafka_topic='t', value_format='JSON');"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_KSQL_QUERIES_FILE
+            value: /etc/ksql/queries/queries.sql
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: ksql-queries
+            mountPath: /etc/ksql/queries
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_LISTENERS
+            value: http://0.0.0.0:8088
 
   # A dotted config key becomes an upper-case underscored variable with a KSQL_ prefix,
   # which is how the Confluent image turns environment into ksql-server.properties.
@@ -149,16 +150,41 @@ tests:
           count: 1
       - isNull:
           path: spec.template.metadata.annotations
-      - notContains:
+      - isNull:
           path: spec.template.spec.volumes
-          content:
-            name: jmx-config
-            configMap:
-              name: t-cp-ksql-server-jmx-configmap
 
-  - it: has no probe of any kind
+  # /healthcheck is not usable: every ksqlDB pod in both k8s-idc namespaces reports
+  # commandRunner unhealthy while running its queries fine, so a probe on it would take
+  # a working fleet out of service.
+  - it: probes /info on the REST port
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet
+          value:
+            path: /info
+            port: server
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet
+          value:
+            path: /info
+            port: server
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.initialDelaySeconds
+          value: 30
+
+  - it: drops a probe that is unset
+    set:
+      livenessProbe: null
     asserts:
       - isNull:
           path: spec.template.spec.containers[0].livenessProbe
-      - isNull:
+      - isNotNull:
           path: spec.template.spec.containers[0].readinessProbe
+
+  # A Service named `ksql` in the same namespace would otherwise arrive as KSQL_PORT,
+  # which the Confluent image reads as configuration and refuses to start on.
+  - it: turns Kubernetes service links off
+    asserts:
+      - equal:
+          path: spec.template.spec.enableServiceLinks
+          value: false
