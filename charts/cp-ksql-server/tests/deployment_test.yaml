@@ -188,3 +188,89 @@ tests:
       - equal:
           path: spec.template.spec.enableServiceLinks
           value: false
+
+  - it: runs as uid 1000 with a hardened container context
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 1000
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation
+          value: false
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.seccompProfile.type
+          value: RuntimeDefault
+
+  - it: appends extraEnv after the config-derived variables
+    set:
+      extraEnv:
+        - name: JAVA_TOOL_OPTIONS
+          value: -XX:MaxRAMPercentage=75
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JAVA_TOOL_OPTIONS
+            value: -XX:MaxRAMPercentage=75
+
+  - it: takes env from a Secret without spelling it into the Deployment
+    set:
+      envFrom:
+        - secretRef:
+            name: ksql-kafka-credentials
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].envFrom
+          value:
+            - secretRef:
+                name: ksql-kafka-credentials
+
+  - it: mounts extra volumes on the server container
+    set:
+      extraVolumes:
+        - name: truststore
+          secret:
+            secretName: kafka-truststore
+      extraVolumeMounts:
+        - name: truststore
+          mountPath: /etc/ksql/secrets
+          readOnly: true
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: truststore
+            secret:
+              secretName: kafka-truststore
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: truststore
+            mountPath: /etc/ksql/secrets
+            readOnly: true
+
+  - it: carries scheduling constraints through
+    set:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: cp-ksql-server
+      priorityClassName: high
+      strategy:
+        type: Recreate
+    asserts:
+      - equal:
+          path: spec.template.spec.topologySpreadConstraints[0].topologyKey
+          value: kubernetes.io/hostname
+      - equal:
+          path: spec.template.spec.priorityClassName
+          value: high
+      - equal:
+          path: spec.strategy.type
+          value: Recreate

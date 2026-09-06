@@ -1,0 +1,23 @@
+{{- $v := include "cp-ksql-server.values" . | fromYaml -}}
+{{- if $v.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ template "cp-ksql-server.fullname" . }}
+  labels:
+{{ include "cp-ksql-server.mergedLabels" (list . $v.podDisruptionBudget.labels) | indent 4 }}
+  {{- with (include "cp-ksql-server.mergedAnnotations" (list . $v.podDisruptionBudget.annotations)) }}
+  annotations:
+{{ . | indent 4 }}
+  {{- end }}
+spec:
+  {{- if $v.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ $v.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if $v.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ $v.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+{{ include "cp-ksql-server.selectorLabels" . | indent 6 }}
+{{- end }}

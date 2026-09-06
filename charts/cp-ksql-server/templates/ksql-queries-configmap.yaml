@@ -1,16 +1,18 @@
-{{- if .Values.ksql.headless }}
+{{- $v := include "cp-ksql-server.values" . | fromYaml -}}
+{{- if $v.ksql.headless }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ template "cp-ksql-server.fullname" . }}-ksql-queries-configmap
   labels:
-    app: {{ template "cp-ksql-server.name" . }}
-    chart: {{ template "cp-ksql-server.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+{{ include "cp-ksql-server.mergedLabels" (list . dict) | indent 4 }}
+  {{- with (include "cp-ksql-server.mergedAnnotations" (list . dict)) }}
+  annotations:
+{{ . | indent 4 }}
+  {{- end }}
 data:
   {{- /* A headless server runs only what is in this file, so an empty one is a server
   that starts, does nothing, and reports itself healthy. Fail the render instead. */}}
   queries.sql: |-
-{{ required "ksql.queries is required when ksql.headless is true" .Values.ksql.queries | indent 4 }}
+{{ required "ksql.queries is required when ksql.headless is true" $v.ksql.queries | indent 4 }}
 {{- end }}

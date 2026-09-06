@@ -1,16 +1,18 @@
-{{- if and .Values.prometheus.jmx.enabled }}
+{{- $v := include "cp-ksql-server.values" . | fromYaml -}}
+{{- if $v.metrics.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ template "cp-ksql-server.fullname" . }}-jmx-configmap
   labels:
-    app: {{ template "cp-ksql-server.name" . }}
-    chart: {{ template "cp-ksql-server.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+{{ include "cp-ksql-server.mergedLabels" (list . dict) | indent 4 }}
+  {{- with (include "cp-ksql-server.mergedAnnotations" (list . dict)) }}
+  annotations:
+{{ . | indent 4 }}
+  {{- end }}
 data:
   jmx-ksql-server-prometheus.yml: |+
-    jmxUrl: service:jmx:rmi:///jndi/rmi://localhost:{{ .Values.jmx.port }}/jmxrmi
+    jmxUrl: service:jmx:rmi:///jndi/rmi://localhost:{{ $v.jmx.port }}/jmxrmi
     lowercaseOutputName: true
     lowercaseOutputLabelNames: true
     ssl: false

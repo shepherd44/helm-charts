@@ -1,0 +1,96 @@
+suite: labels and annotations
+release:
+  name: t
+tests:
+  - it: puts commonLabels and commonAnnotations on every object
+    templates:
+      - deployment.yaml
+      - service.yaml
+      - serviceaccount.yaml
+      - jmx-configmap.yaml
+    set:
+      commonLabels:
+        team: de
+      commonAnnotations:
+        owner: james
+    asserts:
+      - equal:
+          path: metadata.labels["team"]
+          value: de
+      - equal:
+          path: metadata.annotations["owner"]
+          value: james
+
+  - it: lets a per-resource label win over the common one
+    templates:
+      - service.yaml
+    set:
+      commonLabels:
+        tier: common
+      service:
+        labels:
+          tier: service
+    asserts:
+      - equal:
+          path: metadata.labels["tier"]
+          value: service
+
+  # A label value is a string. An appVersion like 8.0 would otherwise reach the API
+  # server as a number and be rejected.
+  - it: renders label values as strings
+    templates:
+      - service.yaml
+    set:
+      commonLabels:
+        revision: 3
+    asserts:
+      - equal:
+          path: metadata.labels["revision"]
+          value: "3"
+
+  # spec.selector is immutable, so the selector stays the legacy pair for ever. The
+  # standard labels live in metadata, where they can change.
+  - it: keeps the selector to the immutable legacy pair
+    templates:
+      - deployment.yaml
+    set:
+      commonLabels:
+        team: de
+    asserts:
+      - equal:
+          path: spec.selector.matchLabels
+          value:
+            app: cp-ksql-server
+            release: t
+
+  - it: carries the standard app.kubernetes.io labels in metadata
+    templates:
+      - deployment.yaml
+    asserts:
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: cp-ksql-server
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: ksql-server
+      - equal:
+          path: metadata.labels["app.kubernetes.io/version"]
+          value: "7.9.9"
+
+  - it: adds pod-only labels and annotations to the pod template alone
+    templates:
+      - deployment.yaml
+    set:
+      podLabels:
+        sidecar.istio.io/inject: "false"
+      podAnnotations:
+        checksum/config: abc123
+    asserts:
+      - equal:
+          path: spec.template.metadata.labels["sidecar.istio.io/inject"]
+          value: "false"
+      - equal:
+          path: spec.template.metadata.annotations["checksum/config"]
+          value: abc123
+      - isNull:
+          path: metadata.labels["sidecar.istio.io/inject"]

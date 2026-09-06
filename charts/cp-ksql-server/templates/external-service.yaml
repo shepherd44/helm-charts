@@ -1,33 +1,26 @@
-{{- if .Values.external.enabled -}}
+{{- $v := include "cp-ksql-server.values" . | fromYaml -}}
+{{- if $v.external.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ template "cp-ksql-server.fullname" . }}-external
-  {{- if .Values.external.annotations }}
-  annotations:
-  {{- range $key, $value := .Values.external.annotations }}
-    {{ $key }}: "{{ $value }}"
-  {{- end }}
-  {{- end }}
   labels:
-    app: {{ template "cp-ksql-server.name" . }}
-    chart: {{ template "cp-ksql-server.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
-spec:
-  type: {{ .Values.external.type }}
-  externalTrafficPolicy: {{ .Values.external.externalTrafficPolicy }}
-  {{- if .Values.external.loadBalancerSourceRanges }}
-  loadBalancerSourceRanges:
-  {{- range $cidr := .Values.external.loadBalancerSourceRanges }}
-    - {{ $cidr }}
+{{ include "cp-ksql-server.mergedLabels" (list . $v.external.labels) | indent 4 }}
+  {{- with (include "cp-ksql-server.mergedAnnotations" (list . $v.external.annotations)) }}
+  annotations:
+{{ . | indent 4 }}
   {{- end }}
+spec:
+  type: {{ $v.external.type }}
+  externalTrafficPolicy: {{ $v.external.externalTrafficPolicy }}
+  {{- with $v.external.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+{{ toYaml . | indent 4 }}
   {{- end }}
   ports:
     - name: server-proxy
-      port: {{ .Values.external.port }}
-      targetPort: {{ .Values.servicePort }}
+      port: {{ $v.external.port }}
+      targetPort: {{ $v.service.port }}
   selector:
-    app: {{ template "cp-ksql-server.name" . }}
-    release: {{ .Release.Name }}
-{{- end -}}
+{{ include "cp-ksql-server.selectorLabels" . | indent 4 }}
+{{- end }}
