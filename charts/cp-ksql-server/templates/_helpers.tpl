@@ -6,6 +6,20 @@ it lives here rather than being spelled out twice.
 {{- define "cp-ksql-server.metricsPortName" -}}metrics{{- end -}}
 
 {{/*
+Refuses combinations that would render something that quietly does nothing.
+*/}}
+{{- define "cp-ksql-server.validateMetrics" -}}
+{{- $v := include "cp-ksql-server.values" . | fromYaml -}}
+{{- $m := $v.metrics -}}
+{{- if and $m.serviceMonitor.enabled $m.podMonitor.enabled -}}
+{{- fail "metrics.serviceMonitor.enabled and metrics.podMonitor.enabled are mutually exclusive: both scrape the same exporter, under two job names." -}}
+{{- end -}}
+{{- if and (or $m.serviceMonitor.enabled $m.podMonitor.enabled) (not $m.enabled) -}}
+{{- fail "metrics.serviceMonitor/podMonitor need metrics.enabled: without the exporter sidecar there is nothing listening on the port they point at." -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Effective values.
 
 1.2.0 gave the chart the layout every other chart here uses: `image` became a map,

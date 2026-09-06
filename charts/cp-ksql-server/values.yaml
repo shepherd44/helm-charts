@@ -198,15 +198,148 @@ jmx:
 metrics:
   enabled: true
   port: 5556
+
+  ## Built from https://github.com/shepherd44/containers (jmx_prometheus_standalone).
+  ## The image's entrypoint is the jar, so the deployment passes only args.
+  ## Swapping this for another image means matching that contract.
+  ##
+  ## This replaced solsson/kafka-prometheus-jmx-exporter, which was last built in 2018,
+  ## pinned by digest, and only worked because it was still JDK 8: the command it was
+  ## launched with passed -XX:+UseCGroupMemoryLimitForHeap and -XX:MaxRAMFraction=1,
+  ## both removed in JDK 11.
   image:
-    ## Pinned by digest rather than tag, which is why the repository carries the
-    ## `@sha256` suffix and the tag holds the digest.
-    repository: solsson/kafka-prometheus-jmx-exporter@sha256
-    tag: 6f82e2b0464f50da8104acd7363fb9b995001ddff77d248379f8788e78946143
+    repository: shepherd9664/jmx-exporter
+    tag: 1.6.0-latest
     pullPolicy: IfNotPresent
+
   ## Resources configuration for the JMX exporter container.
   resources: {}
-  securityContext: {}
+
+  ## The image's own user.
+  securityContext:
+    runAsUser: 10001
+    runAsGroup: 10001
+    runAsNonRoot: true
+
+  ## prometheus.io/scrape and prometheus.io/port on the pod. These only work for a
+  ## Prometheus configured with kubernetes_sd_configs and relabeling; an Operator
+  ## install ignores them and reads the CRDs below instead — which is why the exporter
+  ## in both k8s-idc namespaces has been scraped by nothing for two years. Left on so
+  ## an annotation-based setup keeps working; turn it off when using serviceMonitor or
+  ## podMonitor, so the same target is not also discovered by annotation.
+  scrapeAnnotations: true
+
+  ## ServiceMonitor for the Prometheus Operator. Scrapes the exporter port through the
+  ## chart's Service, which is the usual choice: it follows the endpoints, so it
+  ## survives replica changes.
+  ##
+  ## `labels` almost always has to carry whatever the Prometheus resource selects on —
+  ## with kube-prometheus-stack that is `release: <stack release name>`. Without it the
+  ## object is created and quietly never scraped.
+  ##
+  ## Requires `metrics.enabled`: there is nothing listening otherwise, and the chart
+  ## fails rather than rendering a monitor pointed at a port that does not exist.
+  serviceMonitor:
+    enabled: false
+    ## Defaults to the release namespace.
+    namespace: ""
+    labels: {}
+    annotations: {}
+    jobLabel: ""
+    ## Empty means the Prometheus global default.
+    interval: ""
+    scrapeTimeout: ""
+    path: /metrics
+    scheme: http
+    honorLabels: false
+    ## Extra matchLabels, ANDed with the chart's own selector.
+    selector: {}
+    relabelings: []
+    metricRelabelings: []
+
+  ## PodMonitor. The alternative to serviceMonitor, for scraping pods directly rather
+  ## than through the Service. Enabling both is an error — the same target would be
+  ## scraped twice under two job names.
+  podMonitor:
+    enabled: false
+    namespace: ""
+    labels: {}
+    annotations: {}
+    jobLabel: ""
+    interval: ""
+    scrapeTimeout: ""
+    path: /metrics
+    scheme: http
+    honorLabels: false
+    selector: {}
+    relabelings: []
+    metricRelabelings: []
+
+  ## PrometheusRule. No rules are shipped: what is worth alerting on depends on the
+  ## deployment, and a chart that ships opinionated alerts tends to ship noise.
+  ## `rules` goes into a single group named after the release.
+  prometheusRule:
+    enabled: false
+    namespace: ""
+    labels: {}
+    annotations: {}
+    rules: []
+      # - alert: KsqlServerDown
+      #   expr: up{job="my-release-cp-ksql-server"} == 0
+      #   for: 5m
+      #   labels:
+      #     severity: critical
+      #   annotations:
+      #     summary: ksqlDB server is not being scraped
+
+## Ingress for the ksqlDB REST API (service.port).
+## `name` defaults to the chart fullname; set it to adopt an Ingress that already
+## exists under a different name.
+##
+## The REST API has no authentication of its own. An Ingress puts a database you can
+## issue arbitrary DDL against on the network you point it at — the two k8s-idc
+## deployments are reached through an in-cluster UI instead, and neither has one.
+ingress:
+  enabled: false
+  name: ""
+  className: ""
+  labels: {}
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+  hosts: []
+    # - host: ksqldb.example.com
+    #   paths:
+    #     - path: /
+    #       pathType: Prefix
+  tls: []
+    # - secretName: ksqldb-tls
+    #   hosts:
+    #     - ksqldb.example.com
+
+## HTTPRoute, for clusters running a Gateway API controller. Independent of `ingress`
+## above rather than an either/or switch: during a migration people genuinely run both,
+## and independent flags mean retiring one later is not a breaking change.
+##
+## Needs the Gateway API CRDs installed (v1 needs Kubernetes >= 1.25) and a controller
+## that implements them. The chart renders the object anywhere — nothing is auto-detected,
+## because rendering must not depend on which cluster the client happens to point at.
+##
+## `parentRefs` is required: an HTTPRoute with no parent attaches to no Gateway and
+## silently routes nothing, so the chart fails instead.
+httpRoute:
+  enabled: false
+  name: ""
+  labels: {}
+  annotations: {}
+  parentRefs: []
+    # - name: my-gateway
+    #   namespace: gateway-system
+    #   sectionName: https
+  hostnames: []
+    # - ksqldb.example.com
+  ## Left empty, the chart routes every path to its own Service. Set this to take
+  ## over completely — matches, filters, timeouts, weighted backends.
+  rules: []
 
 ## External Access
 ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-loadbalancer

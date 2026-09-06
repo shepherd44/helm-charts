@@ -1,4 +1,5 @@
 {{- $v := include "cp-ksql-server.values" . | fromYaml -}}
+{{- include "cp-ksql-server.validateMetrics" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,7 +24,7 @@ spec:
       labels:
 {{ include "cp-ksql-server.mergedLabels" (list . $v.podLabels) | indent 8 }}
       {{- $podAnnotations := deepCopy ($v.podAnnotations | default dict) }}
-      {{- if $v.metrics.enabled }}
+      {{- if and $v.metrics.enabled $v.metrics.scrapeAnnotations }}
       {{- $_ := set $podAnnotations "prometheus.io/scrape" "true" }}
       {{- $_ := set $podAnnotations "prometheus.io/port" ($v.metrics.port | toString) }}
       {{- end }}
@@ -122,14 +123,11 @@ spec:
         - name: prometheus-jmx-exporter
           image: "{{ $v.metrics.image.repository }}:{{ $v.metrics.image.tag }}"
           imagePullPolicy: "{{ $v.metrics.image.pullPolicy }}"
-          command:
-            - java
-            - -XX:+UnlockExperimentalVMOptions
-            - -XX:+UseCGroupMemoryLimitForHeap
-            - -XX:MaxRAMFraction=1
-            - -XshowSettings:vm
-            - -jar
-            - jmx_prometheus_httpserver.jar
+          {{- /* The image entrypoint is `java -jar jmx_prometheus_standalone.jar`, so
+          only args are passed. The command this replaced carried
+          -XX:+UseCGroupMemoryLimitForHeap and -XX:MaxRAMFraction=1, which JDK 11
+          removed; they only worked because that image was JDK 8. */}}
+          args:
             - {{ $v.metrics.port | quote }}
             - /etc/jmx-ksql-server/jmx-ksql-server-prometheus.yml
           ports:

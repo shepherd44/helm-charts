@@ -191,13 +191,59 @@ release with "field is immutable".
 The sidecar is on by default, unlike `cp-schema-registry`, because both live deployments
 run it and turning it off here would silently drop their metrics on the first upgrade.
 
+`prometheus.io/scrape` annotations only work for a Prometheus configured with
+`kubernetes_sd_configs` and relabeling. An Operator install ignores them entirely, which
+is why the exporter in both k8s-idc namespaces had been scraped by nothing for two years
+— `count by (job) ({__name__=~"cp_ksql_server_metrics.*"})` returned nothing at all. Use
+a ServiceMonitor or PodMonitor there, and turn the annotations off so the same target is
+not also discovered twice.
+
 | Parameter | Description | Default |
 | --------- | ----------- | ------- |
-| `metrics.enabled` | Run the Prometheus JMX exporter as a sidecar and add the `prometheus.io/*` scrape annotations. | `true` |
+| `metrics.enabled` | Run the Prometheus JMX exporter as a sidecar. | `true` |
 | `metrics.port` | Port the exporter serves on, named `metrics` on the Service. | `5556` |
-| `metrics.image.repository`, `.tag`, `.pullPolicy` | Exporter image. Pinned by digest, which is why the repository carries the `@sha256` suffix and the tag holds the digest. | see `values.yaml` |
-| `metrics.resources`, `metrics.securityContext` | For the exporter container. | `{}` |
+| `metrics.image.repository`, `.tag`, `.pullPolicy` | Exporter image, built from [shepherd44/containers](https://github.com/shepherd44/containers). The entrypoint is the jar, so the Deployment passes args only — swapping the image means matching that contract. | `shepherd9664/jmx-exporter:1.6.0-latest` |
+| `metrics.resources`, `metrics.securityContext` | For the exporter container. | `{}`, uid/gid 10001 |
+| `metrics.scrapeAnnotations` | `prometheus.io/scrape` and `prometheus.io/port` on the pod. | `true` |
 | `jmx.port` | Port the JVM exposes JMX on, for the exporter to read. | `5555` |
+
+Metric names come from the rules in the JMX ConfigMap and are unchanged from the chart's
+original exporter: `cp_ksql_server_metrics_*` from
+`io.confluent.ksql.metrics:type=ksql-engine-query-stats`. The config now says
+`includeObjectNames`, which is what jmx_exporter 1.x understands.
+
+#### ServiceMonitor, PodMonitor, PrometheusRule
+
+Off by default and needing the Prometheus Operator CRDs. Enabling a monitor without
+`metrics.enabled`, or both monitors at once, fails the render rather than creating an
+object that scrapes nothing or the same target twice.
+
+| Parameter | Description | Default |
+| --------- | ----------- | ------- |
+| `metrics.serviceMonitor.enabled` | Scrape the exporter port through the Service. It follows the endpoints, so it survives replica changes — the usual choice. | `false` |
+| `metrics.podMonitor.enabled` | Scrape pods directly instead. Mutually exclusive with the above. | `false` |
+| `.labels` | **Usually required.** kube-prometheus-stack selects monitors on `release: <stack release>`; without it the object is created and quietly never scraped. | `{}` |
+| `.namespace` | Defaults to the release namespace. Set elsewhere, the chart adds a `namespaceSelector` pointing back. | `""` |
+| `.jobLabel`, `.interval`, `.scrapeTimeout`, `.path`, `.scheme`, `.honorLabels`, `.selector`, `.relabelings`, `.metricRelabelings` | Pass-through. | see `values.yaml` |
+| `metrics.prometheusRule.enabled` | Create a PrometheusRule. No alerts are shipped — what is worth alerting on depends on the deployment — so enabling it with an empty `rules` fails the render. | `false` |
+| `metrics.prometheusRule.rules` | Goes into one group named after the release. | `[]` |
+
+### Ingress and HTTPRoute
+
+Both off. The ksqlDB REST API has no authentication of its own: an Ingress puts a
+database you can issue arbitrary DDL against on whatever network you point it at. The
+two k8s-idc deployments are reached through an in-cluster UI instead and have neither.
+
+They are independent flags rather than an either/or switch, because during a migration
+people genuinely run both.
+
+| Parameter | Description | Default |
+| --------- | ----------- | ------- |
+| `ingress.enabled`, `.className`, `.hosts`, `.tls` | Standard Ingress. Paths default to `pathType: Prefix`. | `false` |
+| `ingress.name` | Defaults to the chart fullname; set it to adopt an Ingress that already exists under another name. | `""` |
+| `httpRoute.enabled` | Gateway API HTTPRoute. Needs the CRDs (v1 needs Kubernetes >= 1.25) and a controller; nothing is auto-detected, because rendering must not depend on which cluster the client happens to point at. | `false` |
+| `httpRoute.parentRefs` | **Required when enabled** — an HTTPRoute with no parent attaches to no Gateway and silently routes nothing, so the chart fails instead. | `[]` |
+| `httpRoute.hostnames`, `.rules` | Left empty, `rules` routes every path to the chart's own Service. | `[]` |
 
 ### helm test
 

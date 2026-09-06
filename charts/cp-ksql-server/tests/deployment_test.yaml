@@ -130,6 +130,18 @@ tests:
           path: spec.template.spec.containers[1].name
           value: prometheus-jmx-exporter
       - equal:
+          path: spec.template.spec.containers[1].image
+          value: shepherd9664/jmx-exporter:1.6.0-latest
+      # The image entrypoint is the jar, so only args are passed. The command this
+      # replaced carried JVM flags JDK 11 removed.
+      - isNull:
+          path: spec.template.spec.containers[1].command
+      - equal:
+          path: spec.template.spec.containers[1].args
+          value:
+            - "5556"
+            - /etc/jmx-ksql-server/jmx-ksql-server-prometheus.yml
+      - equal:
           path: spec.template.metadata.annotations["prometheus.io/scrape"]
           value: "true"
       - equal:

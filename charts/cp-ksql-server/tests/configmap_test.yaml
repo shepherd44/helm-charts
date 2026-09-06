@@ -12,6 +12,14 @@ tests:
       - matchRegex:
           path: data["jmx-ksql-server-prometheus.yml"]
           pattern: io\.confluent\.ksql\.metrics:type=ksql-engine-query-stats
+      # jmx_exporter 1.x renamed whitelistObjectNames. The metric names the rules
+      # produce are unchanged, so nothing downstream has to move.
+      - matchRegex:
+          path: data["jmx-ksql-server-prometheus.yml"]
+          pattern: "includeObjectNames:"
+      - matchRegex:
+          path: data["jmx-ksql-server-prometheus.yml"]
+          pattern: cp_ksql_server_metrics_
       - matchRegex:
           path: data["jmx-ksql-server-prometheus.yml"]
           pattern: rmi://localhost:5555/jmxrmi
