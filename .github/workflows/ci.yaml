@@ -8,13 +8,25 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# What each chart needs from CI — the extra render flags, whether it can be installed on
+# a cluster, what has to exist first — lives in `.github/ci/<chart>.env`, not here. This
+# file names no chart. Adding one means adding a chart directory and nothing else.
+env:
+  # The declared floor and a current version. kindest/node images as old as 1.22 need a
+  # kind release from the same era; if that entry stops booting on the runner image, drop
+  # it and let the 1.22 kubeconform pass in `render` carry the floor on its own.
+  K8S_VERSIONS: >-
+    [{"k8s": "v1.22.17", "kind": "v0.20.0"},
+     {"k8s": "v1.31.6",  "kind": "v0.27.0"}]
+
 jobs:
-  static:
-    name: lint / unit test / schema
+  lint:
+    name: ct lint
     runs-on: ubuntu-latest
     outputs:
       changed: ${{ steps.list.outputs.changed }}
       charts: ${{ steps.list.outputs.charts }}
+      install: ${{ steps.list.outputs.install }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,34 +46,75 @@ jobs:
 
       - uses: helm/chart-testing-action@v2.7.0
 
+      # Two lists come out of here: every chart to render, and the chart-by-cluster
+      # combinations to install. A chart opts into the second one with INSTALL=true in
+      # its .github/ci/<chart>.env; without it `ct install` would put the chart on a cluster with
+      # default values and wait for a readiness it was never going to reach.
       - name: List changed charts
         id: list
         run: |
-          charts=$(ct list-changed --config ct.yaml | tr '\n' ' ' | sed 's/ *$//')
+          set -euo pipefail
+          charts=$(ct list-changed --config ct.yaml)
           if [ -z "$charts" ]; then
-            charts=$(find charts -mindepth 1 -maxdepth 1 -type d ! -name common | tr '\n' ' ' | sed 's/ *$//')
+            charts=$(find charts -mindepth 1 -maxdepth 1 -type d ! -name common)
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No chart changed; validating all charts, skipping the install job."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-          echo "charts=$charts" >> "$GITHUB_OUTPUT"
+
+          install='[]'
+          for chart in $charts; do
+            INSTALL=false
+            CHART="$chart"
+            # shellcheck disable=SC1090
+            [ -f ".github/ci/$(basename "$chart").env" ] && . ".github/ci/$(basename "$chart").env"
+            [ "$INSTALL" = true ] || continue
+            install=$(jq -c --arg c "$chart" --argjson k "$K8S_VERSIONS" \
+              '. + ($k | map({chart: $c} + .))' <<< "$install")
+          done
+
+          {
+            echo "charts=$(printf '%s\n' $charts | jq -R . | jq -sc .)"
+            echo "install=$install"
+          } >> "$GITHUB_OUTPUT"
           echo "Charts: $charts"
+          echo "Install: $install"
 
       # Also enforces the rule that a changed chart must come with a version bump.
       - name: ct lint
         run: ct lint --config ct.yaml
 
+  render:
+    name: render ${{ matrix.chart }}
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chart: ${{ fromJSON(needs.lint.outputs.charts) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.18.4
+
+      # A fresh checkout has no built dependencies — charts/mongodb-sharded/charts/common-*.tgz
+      # is gitignored — and without them every `common.*` include fails, which looks like a
+      # chart bug and is not one. This used to be carried by `ct lint` building them
+      # earlier in the same job; the job split took that away.
+      - name: Build chart dependencies
+        run: helm dependency update "${{ matrix.chart }}"
+
       - name: Template unit tests
         run: |
           helm plugin install https://github.com/helm-unittest/helm-unittest
-          for chart in ${{ steps.list.outputs.charts }}; do
-            if [ -d "$chart/tests" ]; then
-              helm unittest "$chart"
-            else
-              echo "skip $chart: no tests/"
-            fi
-          done
+          if [ -d "${{ matrix.chart }}/tests" ]; then
+            helm unittest "${{ matrix.chart }}"
+          else
+            echo "skip ${{ matrix.chart }}: no tests/"
+          fi
 
       - name: Install kubeconform
         run: |
@@ -70,55 +123,40 @@ jobs:
           tar -xzf /tmp/kubeconform.tar.gz -C /tmp kubeconform
           sudo install /tmp/kubeconform /usr/local/bin/
 
-      # Renders every chart and validates the result against the real API schemas, at
-      # the declared floor and at a current version. CRD schemas (ServiceMonitor and
-      # friends) come from the datree catalog; anything with no schema is skipped rather
-      # than failed. The images are printed so a tag that was never built in
+      # Renders the chart and validates the result against the real API schemas, at the
+      # declared floor and at a current version. CRD schemas (ServiceMonitor and friends)
+      # come from the datree catalog; anything with no schema is skipped rather than
+      # failed. The images are printed so a tag that was never built in
       # shepherd44/containers shows up in the log instead of at install time.
       #
-      # The optional pieces are per chart on purpose: `--set` on a key a chart does not
-      # have is accepted silently, so reusing one chart's flags on the other renders
-      # plain defaults and exits zero, which reads exactly like a passing check.
+      # RENDER_ARGS comes from the chart, not from here, because `--set` on a key a chart
+      # does not have is accepted silently: one chart's flags on another render plain
+      # defaults and exit zero, which reads exactly like a passing check.
       - name: Render, validate and list images
         run: |
           set -euo pipefail
+          CHART="${{ matrix.chart }}"
+          RENDER_ARGS=()
+          # shellcheck disable=SC1090
+          [ -f ".github/ci/$(basename "$CHART").env" ] && . ".github/ci/$(basename "$CHART").env"
+
           crds='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
-          for chart in ${{ steps.list.outputs.charts }}; do
-            # A fresh checkout has no built dependencies, and without them `helm template`
-            # fails on a common.* include, which looks like a chart bug and is not one.
-            helm dependency update "$chart"
-            case "$chart" in
-              */cp-schema-registry)
-                # The monitors are not in ci/ because ct installs those on a cluster
-                # with no Prometheus Operator CRDs; kubeconform validates them here
-                # against the CRD catalog instead.
-                args=(-f "$chart/ci/metrics-values.yaml" -f "$chart/ci/ingress-pdb-values.yaml"
-                      --set metrics.serviceMonitor.enabled=true
-                      --set metrics.prometheusRule.enabled=true
-                      --set 'metrics.prometheusRule.rules[0].alert=SchemaRegistryDown'
-                      --set 'metrics.prometheusRule.rules[0].expr=up == 0'
-                      --set httpRoute.enabled=true
-                      --set 'httpRoute.parentRefs[0].name=ci-gateway') ;;
-              */mongodb-sharded)
-                args=(--set metrics.enabled=true --set volumePermissions.enabled=true) ;;
-              *)
-                args=() ;;
-            esac
-            for kube in 1.22.0 1.31.0; do
-              echo "== $chart @ $kube"
-              helm template ci-test "$chart" "${args[@]}" --kube-version "$kube" \
-                | kubeconform -strict -summary \
-                    -kubernetes-version "$kube" \
-                    -schema-location default \
-                    -schema-location "$crds" \
-                    -ignore-missing-schemas
-            done
-            echo "== $chart images"
-            helm template ci-test "$chart" "${args[@]}" | grep -E '^[[:space:]]+image:' | sort -u
-            # annotations.images is a gate, not documentation: the bundled common
-            # library compares it against every rendered image. Fail when it drifts.
-            python3 hack/check-image-annotations.py "$chart" "${args[@]}"
+          for kube in 1.22.0 1.31.0; do
+            echo "== $CHART @ $kube"
+            helm template ci-test "$CHART" "${RENDER_ARGS[@]}" --kube-version "$kube" \
+              | kubeconform -strict -summary \
+                  -kubernetes-version "$kube" \
+                  -schema-location default \
+                  -schema-location "$crds" \
+                  -ignore-missing-schemas
           done
+
+          echo "== $CHART images"
+          helm template ci-test "$CHART" "${RENDER_ARGS[@]}" | grep -E '^[[:space:]]+image:' | sort -u
+
+          # annotations.images is a gate, not documentation: the bundled common library
+          # compares it against every rendered image. Fail when it drifts.
+          python3 hack/check-image-annotations.py "$CHART" "${RENDER_ARGS[@]}"
 
   helm4:
     name: helm 4 render
@@ -143,21 +181,19 @@ jobs:
           done
 
   install:
-    name: install on kind (k8s ${{ matrix.k8s }})
+    name: install ${{ matrix.chart }} on kind (k8s ${{ matrix.k8s }})
     runs-on: ubuntu-latest
-    needs: static
-    if: needs.static.outputs.changed == 'true'
+    needs: lint
+    # Skipped when no chart changed, since there is nothing new to install — except on a
+    # manual run, which is the only way to exercise this job from a branch that touches
+    # CI and no chart.
+    if: >-
+      needs.lint.outputs.install != '[]' &&
+      (needs.lint.outputs.changed == 'true' || github.event_name == 'workflow_dispatch')
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # The declared floor. kindest/node images this old need a kind release
-          # from the same era; if this entry stops booting on the runner image,
-          # drop it and let the 1.22 kubeconform pass in `static` carry the floor.
-          - k8s: v1.22.17
-            kind: v0.20.0
-          - k8s: v1.31.6
-            kind: v0.27.0
+        include: ${{ fromJSON(needs.lint.outputs.install) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -178,15 +214,24 @@ jobs:
           node_image: kindest/node:${{ matrix.k8s }}
           cluster_name: ct
 
-      # cp-schema-registry cannot start without a Kafka to hold the _schemas topic,
-      # so the install test needs one before it means anything.
-      - name: Deploy the Kafka fixture
+      # Whatever has to exist on the cluster before the chart has any chance of coming
+      # up — cp-schema-registry cannot reach readiness without a Kafka holding the
+      # _schemas topic. A chart that needs nothing declares nothing.
+      - name: Deploy the chart's fixtures
         run: |
-          kubectl apply -f .github/ci/kafka.yaml
-          kubectl -n kafka rollout status deployment/kafka --timeout=300s
+          set -euo pipefail
+          CHART="${{ matrix.chart }}"
+          FIXTURES=()
+          FIXTURE_WAIT=()
+          # shellcheck disable=SC1090
+          [ -f ".github/ci/$(basename "$CHART").env" ] && . ".github/ci/$(basename "$CHART").env"
+          if [ ${#FIXTURES[@]} -eq 0 ]; then
+            echo "no fixtures for $CHART"
+            exit 0
+          fi
+          for f in "${FIXTURES[@]}"; do kubectl apply -f "$f"; done
+          if [ ${#FIXTURE_WAIT[@]} -gt 0 ]; then kubectl "${FIXTURE_WAIT[@]}"; fi
 
       # Installs each ci/*-values.yaml, waits for readiness, then runs `helm test`.
-      # mongodb-sharded installs a one-shard, no-persistence topology; the default two
-      # shards would double the pods for no extra coverage.
       - name: ct install
-        run: ct install --config ct.yaml --charts charts/cp-schema-registry,charts/mongodb-sharded
+        run: ct install --config ct.yaml --charts "${{ matrix.chart }}"
