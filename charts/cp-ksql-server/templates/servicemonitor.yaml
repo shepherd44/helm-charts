@@ -1,0 +1,53 @@
+{{- $v := include "cp-ksql-server.values" . | fromYaml -}}
+{{- include "cp-ksql-server.validateMetrics" . -}}
+{{- if and $v.metrics.enabled $v.metrics.serviceMonitor.enabled }}
+{{- $sm := $v.metrics.serviceMonitor }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ template "cp-ksql-server.fullname" . }}
+  namespace: {{ $sm.namespace | default .Release.Namespace }}
+  labels:
+{{ include "cp-ksql-server.mergedLabels" (list . $sm.labels) | indent 4 }}
+  {{- with (include "cp-ksql-server.mergedAnnotations" (list . $sm.annotations)) }}
+  annotations:
+{{ . | indent 4 }}
+  {{- end }}
+spec:
+  {{- with $sm.jobLabel }}
+  jobLabel: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+{{ include "cp-ksql-server.selectorLabels" . | indent 6 }}
+    {{- with $sm.selector }}
+{{ toYaml . | indent 6 }}
+    {{- end }}
+  {{- if $sm.namespace }}
+  {{/* A ServiceMonitor outside the release namespace has to be told where to look. */}}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  {{- end }}
+  endpoints:
+    - port: {{ include "cp-ksql-server.metricsPortName" . }}
+      path: {{ $sm.path }}
+      scheme: {{ $sm.scheme }}
+      {{- with $sm.interval }}
+      interval: {{ . }}
+      {{- end }}
+      {{- with $sm.scrapeTimeout }}
+      scrapeTimeout: {{ . }}
+      {{- end }}
+      {{- if $sm.honorLabels }}
+      honorLabels: true
+      {{- end }}
+      {{- with $sm.relabelings }}
+      relabelings:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with $sm.metricRelabelings }}
+      metricRelabelings:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+{{- end }}

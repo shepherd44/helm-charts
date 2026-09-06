@@ -1,0 +1,23 @@
+{{- $v := include "cp-ksql-server.values" . | fromYaml -}}
+{{- if $v.metrics.prometheusRule.enabled }}
+{{- $pr := $v.metrics.prometheusRule }}
+{{- if not $pr.rules }}
+{{- fail "metrics.prometheusRule.enabled is on but metrics.prometheusRule.rules is empty: the chart ships no default alerts, so this would create an empty rule group." }}
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ template "cp-ksql-server.fullname" . }}
+  namespace: {{ $pr.namespace | default .Release.Namespace }}
+  labels:
+{{ include "cp-ksql-server.mergedLabels" (list . $pr.labels) | indent 4 }}
+  {{- with (include "cp-ksql-server.mergedAnnotations" (list . $pr.annotations)) }}
+  annotations:
+{{ . | indent 4 }}
+  {{- end }}
+spec:
+  groups:
+    - name: {{ template "cp-ksql-server.fullname" . }}
+      rules:
+{{ toYaml $pr.rules | indent 8 }}
+{{- end }}

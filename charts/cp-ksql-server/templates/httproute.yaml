@@ -1,0 +1,38 @@
+{{- $v := include "cp-ksql-server.values" . | fromYaml -}}
+{{- if $v.httpRoute.enabled }}
+{{- $hr := $v.httpRoute }}
+{{- if not $hr.parentRefs }}
+{{- fail "httpRoute.enabled is on but httpRoute.parentRefs is empty: an HTTPRoute with no parent attaches to no Gateway and routes nothing." }}
+{{- end }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $hr.name | default (include "cp-ksql-server.fullname" .) }}
+  labels:
+{{ include "cp-ksql-server.mergedLabels" (list . $hr.labels) | indent 4 }}
+  {{- with (include "cp-ksql-server.mergedAnnotations" (list . $hr.annotations)) }}
+  annotations:
+{{ . | indent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+{{ toYaml $hr.parentRefs | indent 4 }}
+  {{- with $hr.hostnames }}
+  hostnames:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  rules:
+  {{- if $hr.rules }}
+{{ toYaml $hr.rules | indent 4 }}
+  {{- else }}
+    {{- /* The backend comes from the same helper the Ingress uses, so the two
+    networking paths cannot drift apart. */}}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ include "cp-ksql-server.fullname" . }}
+          port: {{ $v.service.port }}
+  {{- end }}
+{{- end }}

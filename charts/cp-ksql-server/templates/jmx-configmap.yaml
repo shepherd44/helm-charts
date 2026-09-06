@@ -16,7 +16,7 @@ data:
     lowercaseOutputName: true
     lowercaseOutputLabelNames: true
     ssl: false
-    whitelistObjectNames:
+    includeObjectNames:
     - io.confluent.ksql.metrics:type=ksql-engine-query-stats
     rules:
     - pattern : 'io.confluent.ksql.metrics<type=ksql-engine-query-stats>([^:]+):'

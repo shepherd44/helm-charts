@@ -1,0 +1,77 @@
+suite: ingress and httpRoute
+release:
+  name: t
+tests:
+  - it: renders neither by default
+    templates:
+      - ingress.yaml
+      - httproute.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: points the Ingress at the REST port of its own Service
+    templates:
+      - ingress.yaml
+    set:
+      ingress.enabled: true
+      ingress.className: nginx
+      ingress.hosts:
+        - host: ksqldb.example.com
+          paths:
+            - path: /
+    asserts:
+      - equal:
+          path: spec.ingressClassName
+          value: nginx
+      - equal:
+          path: spec.rules[0].host
+          value: ksqldb.example.com
+      - equal:
+          path: spec.rules[0].http.paths[0].pathType
+          value: Prefix
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service
+          value:
+            name: t-cp-ksql-server
+            port:
+              number: 8088
+
+  - it: can adopt an Ingress that already exists under another name
+    templates:
+      - ingress.yaml
+    set:
+      ingress.enabled: true
+      ingress.name: idc-ksqldb
+      ingress.hosts:
+        - host: ksqldb.example.com
+          paths:
+            - path: /
+    asserts:
+      - equal:
+          path: metadata.name
+          value: idc-ksqldb
+
+  # An HTTPRoute with no parent attaches to no Gateway and routes nothing.
+  - it: refuses an HTTPRoute with no parentRefs
+    templates:
+      - httproute.yaml
+    set:
+      httpRoute.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "httpRoute.enabled is on but httpRoute.parentRefs is empty: an HTTPRoute with no parent attaches to no Gateway and routes nothing."
+
+  - it: routes everything to its own Service when no rules are given
+    templates:
+      - httproute.yaml
+    set:
+      httpRoute.enabled: true
+      httpRoute.parentRefs:
+        - name: gw
+    asserts:
+      - equal:
+          path: spec.rules[0].backendRefs[0]
+          value:
+            name: t-cp-ksql-server
+            port: 8088

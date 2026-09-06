@@ -1,0 +1,129 @@
+suite: monitors
+release:
+  name: t
+tests:
+  - it: renders no monitor by default
+    templates:
+      - servicemonitor.yaml
+      - podmonitor.yaml
+      - prometheusrule.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: scrapes the exporter port through the Service
+    templates:
+      - servicemonitor.yaml
+    set:
+      metrics.serviceMonitor.enabled: true
+    asserts:
+      - equal:
+          path: metadata.name
+          value: t-cp-ksql-server
+      - equal:
+          path: spec.selector.matchLabels
+          value:
+            app: cp-ksql-server
+            release: t
+      - equal:
+          path: spec.endpoints[0].port
+          value: metrics
+      - equal:
+          path: spec.endpoints[0].path
+          value: /metrics
+
+  # kube-prometheus-stack selects ServiceMonitors on `release`. Without the label the
+  # object is created and quietly never scraped, so it has to be settable — and it
+  # collides with one of the chart's own labels, which is why labels are merged.
+  - it: lets the Prometheus selector label be set
+    templates:
+      - servicemonitor.yaml
+    set:
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.labels:
+        release: kube-prometheus-stack
+    asserts:
+      - equal:
+          path: metadata.labels["release"]
+          value: kube-prometheus-stack
+
+  - it: looks back into the release namespace when placed elsewhere
+    templates:
+      - servicemonitor.yaml
+    set:
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.namespace: monitoring
+    asserts:
+      - equal:
+          path: metadata.namespace
+          value: monitoring
+      - equal:
+          path: spec.namespaceSelector.matchNames[0]
+          value: NAMESPACE
+
+  - it: scrapes pods directly with a PodMonitor
+    templates:
+      - podmonitor.yaml
+    set:
+      metrics.podMonitor.enabled: true
+    asserts:
+      - equal:
+          path: spec.podMetricsEndpoints[0].port
+          value: metrics
+
+  # Both scrape the same exporter, under two job names.
+  - it: refuses both monitors at once
+    templates:
+      - servicemonitor.yaml
+    set:
+      metrics.serviceMonitor.enabled: true
+      metrics.podMonitor.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "metrics.serviceMonitor.enabled and metrics.podMonitor.enabled are mutually exclusive: both scrape the same exporter, under two job names."
+
+  - it: refuses a monitor with no exporter to point at
+    templates:
+      - servicemonitor.yaml
+    set:
+      metrics.enabled: false
+      metrics.serviceMonitor.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "metrics.serviceMonitor/podMonitor need metrics.enabled: without the exporter sidecar there is nothing listening on the port they point at."
+
+  - it: refuses an empty rule group
+    templates:
+      - prometheusrule.yaml
+    set:
+      metrics.prometheusRule.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "metrics.prometheusRule.enabled is on but metrics.prometheusRule.rules is empty: the chart ships no default alerts, so this would create an empty rule group."
+
+  - it: puts the given rules in a group named after the release
+    templates:
+      - prometheusrule.yaml
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.rules:
+        - alert: KsqlServerDown
+          expr: up == 0
+    asserts:
+      - equal:
+          path: spec.groups[0].name
+          value: t-cp-ksql-server
+      - equal:
+          path: spec.groups[0].rules[0].alert
+          value: KsqlServerDown
+
+  # The annotations only work for a Prometheus using kubernetes_sd_configs; an Operator
+  # install ignores them, which is why the k8s-idc exporters were scraped by nothing.
+  - it: drops the scrape annotations when asked
+    templates:
+      - deployment.yaml
+    set:
+      metrics.scrapeAnnotations: false
+    asserts:
+      - isNull:
+          path: spec.template.metadata.annotations
