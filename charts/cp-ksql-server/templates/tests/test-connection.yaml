@@ -1,0 +1,40 @@
+{{- if .Values.tests.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ template "cp-ksql-server.fullname" . }}-test-connection
+  {{- /* Deliberately not `app: <name>`: the Service selects on app plus release, and a
+  test pod carrying those labels becomes one of its own endpoints the moment it is
+  Running. With one replica the curl can then be routed to the test pod itself. */}}
+  labels:
+    app: {{ template "cp-ksql-server.name" . }}-test-connection
+    chart: {{ template "cp-ksql-server.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  {{- with .Values.tests.image.pullSecrets }}
+  imagePullSecrets:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  containers:
+    - name: test-connection
+      image: "{{ .Values.tests.image.repository }}:{{ .Values.tests.image.tag }}"
+      imagePullPolicy: "{{ .Values.tests.image.pullPolicy }}"
+      {{- /* /info is the one endpoint that answers only when the REST layer is really
+      up. -f turns an HTTP error status into a non-zero exit. */}}
+      args:
+        - -sSf
+        - --max-time
+        - "10"
+        - http://{{ template "cp-ksql-server.fullname" . }}:{{ .Values.servicePort }}/info
+      resources:
+{{ toYaml .Values.tests.resources | indent 8 }}
+      {{- with .Values.tests.securityContext }}
+      securityContext:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+{{- end }}

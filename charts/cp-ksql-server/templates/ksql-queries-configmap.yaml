@@ -1,3 +1,4 @@
+{{- if .Values.ksql.headless }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -8,8 +9,8 @@ metadata:
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 data:
-  {{- $files := .Files }}
-  {{- range tuple "queries.sql" }}
-  {{ . }}: |-
-{{ $files.Get . | indent 4 }}
-  {{- end }}
+  {{- /* A headless server runs only what is in this file, so an empty one is a server
+  that starts, does nothing, and reports itself healthy. Fail the render instead. */}}
+  queries.sql: |-
+{{ required "ksql.queries is required when ksql.headless is true" .Values.ksql.queries | indent 4 }}
+{{- end }}

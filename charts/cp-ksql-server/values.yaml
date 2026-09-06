@@ -9,7 +9,7 @@ serviceId: "cp-ksql-server"
 ## Image Info
 ## ref: https://hub.docker.com/r/confluentinc/cp-ksql-server/
 image: confluentinc/cp-ksqldb-server
-imageTag: 7.9.0
+imageTag: 7.9.9
 
 ## Specify a imagePullPolicy
 ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -24,6 +24,41 @@ servicePort: 8088
 
 ## KSQL JVM Heap Option
 heapOptions: "-Xms512M -Xmx512M"
+
+## Kubernetes publishes a <SERVICE>_PORT style variable into every pod for every Service
+## in the namespace, and the Confluent image reads KSQL_* out of the environment as
+## configuration. A Service named `ksql` next door becomes KSQL_PORT=tcp://10.0.0.1:8088
+## and the server exits on startup complaining about a deprecated setting. Nothing here
+## needs the links.
+enableServiceLinks: false
+
+## Probes. Set either to {} to omit it.
+##
+## /info, not /healthcheck. /healthcheck reports `commandRunner.isHealthy: false` on
+## servers that are running their queries perfectly well — every ksqlDB pod in both
+## k8s-idc namespaces answers that way right now — so a probe reading it would take a
+## healthy fleet out of service. /info answers 200 once the REST layer is listening,
+## which is what a probe can actually tell you here.
+##
+## The initial delays are generous on purpose: a server with persistent queries replays
+## its command topic and rebuilds RocksDB state before it serves, and that is minutes,
+## not seconds, on a large state store.
+livenessProbe:
+  httpGet:
+    path: /info
+    port: server
+  initialDelaySeconds: 120
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 3
+readinessProbe:
+  httpGet:
+    path: /info
+    port: server
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 12
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -84,8 +119,20 @@ external:
 
 ## Headless mode
 ## ref: https://docs.confluent.io/current/ksql/docs/installation/server-config/index.html
+##
+## Off by default, which is the other way round from upstream. Interactive is how ksqlDB
+## is normally run — it is what both k8s-idc deployments use — and upstream's default of
+## headless came with a queries file holding the pageviews/users walkthrough, so the
+## out-of-the-box behaviour was to run a tutorial against topics that do not exist.
 ksql:
-  headless: true
+  headless: false
+
+  ## The queries a headless server runs, mounted at /etc/ksql/queries/queries.sql.
+  ## Required when headless is on and ignored otherwise. This used to be a queries.sql
+  ## file inside the chart, which meant changing it meant forking the chart.
+  queries: ""
+
+  ## Only read in interactive mode; a headless server takes these from its queries.
   sinkReplicas: "3"
   streamsReplicationFactor: "3"
   internalTopicReplicas: "3"
@@ -103,3 +150,27 @@ cp-schema-registry:
 ## ref: https://docs.confluent.io/current/ksql/docs/installation/server-config/config-reference.html
 configurationOverrides: {}
   # "ksql.streams.producer.retries": "2147483647"
+
+## `helm test`. Runs one curl against /info and fails on any non-2xx.
+tests:
+  enabled: true
+  image:
+    repository: curlimages/curl
+    tag: 8.11.1
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+  ## Numeric on purpose: the image's own user is the name `curl_user`, and a pod with
+  ## runAsNonRoot and a non-numeric user is rejected by the kubelet before it starts.
+  securityContext:
+    runAsUser: 100
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      memory: 64Mi

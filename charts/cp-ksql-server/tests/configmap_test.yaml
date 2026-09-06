@@ -25,27 +25,35 @@ tests:
       - hasDocuments:
           count: 0
 
-  # The Deployment only mounts this in headless mode, but the ConfigMap itself is
-  # ungated, so every interactive deployment carries a copy of it for nothing. Both of
-  # the k8s-idc namespaces run `ksql.headless: false` and both have it.
-  - it: renders the queries ConfigMap even when headless mode is off
+  - it: renders no queries ConfigMap outside headless mode
+    templates:
+      - ksql-queries-configmap.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: writes the queries from values in headless mode
     templates:
       - ksql-queries-configmap.yaml
     set:
-      ksql.headless: false
+      ksql.headless: true
+      ksql.queries: |
+        CREATE STREAM s (id INT) WITH (kafka_topic='t', value_format='JSON');
     asserts:
       - equal:
           path: metadata.name
           value: t-cp-ksql-server-ksql-queries-configmap
-      - isNotNull:
-          path: data["queries.sql"]
-
-  # queries.sql is upstream's `pageviews`/`users` walkthrough, shipped as an example and
-  # never replaced. Anything actually using headless mode has to override the file.
-  - it: still ships upstream's tutorial SQL as the queries file
-    templates:
-      - ksql-queries-configmap.yaml
-    asserts:
       - matchRegex:
           path: data["queries.sql"]
-          pattern: CREATE STREAM pageviews_original
+          pattern: CREATE STREAM s \(id INT\)
+
+  # A headless server runs only what is in this file, so an empty one starts, does
+  # nothing, and reports itself healthy.
+  - it: refuses to render a headless server with no queries
+    templates:
+      - ksql-queries-configmap.yaml
+    set:
+      ksql.headless: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "ksql.queries is required when ksql.headless is true"

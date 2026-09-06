@@ -136,7 +136,7 @@ The configuration parameters in this section control the resources requested and
 | Parameter | Description | Default |
 | --------- | ----------- | ------- |
 | `image` | Docker Image of Confluent KSQL Server. | `confluentinc/cp-ksql-server` |
-| `imageTag` | Docker Image Tag of Confluent KSQL Server. | `6.1.0` |
+| `imageTag` | Docker Image Tag of Confluent KSQL Server. | `7.9.9` |
 | `imagePullPolicy` | Docker Image Tag of Confluent KSQL Server. | `IfNotPresent` |
 | `imagePullSecrets` | Secrets to be used for private registries. | see [values.yaml](values.yaml) for details |
 
@@ -144,6 +144,36 @@ The configuration parameters in this section control the resources requested and
  Parameter | Description | Default |
 | --------- | ----------- | ------- |
 | `configurationOverrides` | KSQL [configuration](https://docs.confluent.io/current/ksql/docs/installation/server-config/config-reference.html) overrides in the dictionary format | `{}` |
+
+### Mode and queries
+
+| Parameter | Description | Default |
+| --------- | ----------- | ------- |
+| `ksql.headless` | Run non-interactively from a fixed queries file instead of serving the REST API. Off, which is the other way round from upstream — interactive is how ksqlDB is normally run, and upstream's headless default came with a tutorial as its workload. | `false` |
+| `ksql.queries` | The SQL a headless server runs, mounted at `/etc/ksql/queries/queries.sql`. Required when `ksql.headless` is on; rendering fails without it, because a headless server with no queries starts, does nothing, and reports itself healthy. | `""` |
+| `ksql.sinkReplicas` | Replication factor for sink topics. Interactive mode only. | `"3"` |
+| `ksql.streamsReplicationFactor` | Replication factor for Kafka Streams internal topics. Interactive mode only. | `"3"` |
+| `ksql.internalTopicReplicas` | Replication factor for ksqlDB's own internal topics. Interactive mode only. | `"3"` |
+
+### Probes
+
+Both probe `/info`, not `/healthcheck`: `/healthcheck` reports `commandRunner` unhealthy
+on servers that are running their queries perfectly well, so a probe reading it would
+take a working deployment out of service. Set either to `{}` to omit it.
+
+| Parameter | Description | Default |
+| --------- | ----------- | ------- |
+| `livenessProbe` | Restarts the container when the REST layer stops answering. | `GET /info`, 120s delay |
+| `readinessProbe` | Holds the pod out of the Service until it answers. The delay and failure threshold allow for a command topic replay and a RocksDB state rebuild, which is minutes on a large state store. | `GET /info`, 30s delay, 12 failures |
+| `enableServiceLinks` | Kubernetes injects a `<SERVICE>_PORT` variable per Service in the namespace, and the Confluent image reads `KSQL_*` as configuration — a Service named `ksql` next door stops the server from starting. | `false` |
+
+### helm test
+
+| Parameter | Description | Default |
+| --------- | ----------- | ------- |
+| `tests.enabled` | Render the `helm test` hook, one curl against `/info`. | `true` |
+| `tests.image` | Image for the test pod. | `curlimages/curl:8.11.1` |
+| `tests.securityContext` | Numeric `runAsUser` on purpose: the image's own user is the name `curl_user`, and a pod with `runAsNonRoot` and a non-numeric user is rejected before it starts. | see `values.yaml` |
 
 ### Port
 
