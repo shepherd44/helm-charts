@@ -10,8 +10,8 @@ type: application
 ## The -0 suffix makes pre-release cluster versions such as 1.22.0-alpha.3 compare
 ## correctly instead of sorting below 1.22.0.
 kubeVersion: ">=1.22.0-0"
-version: 1.5.0
-appVersion: "7.9.9"
+version: 1.6.0
+appVersion: "8.3.1"
 keywords:
   - kafka
   - schema-registry
@@ -31,7 +31,7 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/images: |
     - name: cp-schema-registry
-      image: confluentinc/cp-schema-registry:7.9.9
+      image: confluentinc/cp-schema-registry:8.3.1
     - name: jmx-exporter
       image: shepherd9664/jmx-exporter:1.6.0-latest
     - name: test-connection
@@ -44,5 +44,5 @@ annotations:
     - name: Schema Registry version reference
       url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-schema-registry/docs/schema-registry-versions.md
   artifacthub.io/changes: |
-    - kind: fixed
-      description: "Kubernetes service links are off: their injected variables collide with the image's SCHEMA_REGISTRY_* configuration and crash the container"
+    - kind: changed
+      description: "Default Schema Registry image is 8.3.1 (Confluent Platform 8.3.x, Apache Kafka 4.3 clients, Temurin 25) instead of 7.9.9"

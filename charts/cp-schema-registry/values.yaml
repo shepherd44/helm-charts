@@ -21,7 +21,7 @@ replicaCount: 1
 ## ref: https://hub.docker.com/r/confluentinc/cp-schema-registry/
 image:
   repository: confluentinc/cp-schema-registry
-  tag: "7.9.9"
+  tag: "8.3.1"
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
   pullPolicy: IfNotPresent
   ## Secrets must already exist in the namespace.
@@ -466,7 +466,7 @@ metrics:
 ##
 ##   schema_registry:
 ##     image: confluentinc/cp-schema-registry   -> image.repository
-##     imageTag: "7.9.9"                        -> image.tag
+##     imageTag: "8.3.1"                        -> image.tag
 ##     imagePullPolicy: IfNotPresent            -> image.pullPolicy
 ##     imagePullSecrets: []                     -> image.pullSecrets
 ##     servicePort: 8081                        -> service.port

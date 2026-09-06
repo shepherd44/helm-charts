@@ -97,7 +97,7 @@ pushed the very `.tgz` committed in `docs/` rather than building the chart again
 
 | chart | app | install notes |
 |---|---|---|
-| [`cp-schema-registry`](charts/cp-schema-registry/README.md) | Confluent Schema Registry 7.9 | needs an existing Kafka; the upstream confluent chart is gone, this is the only copy |
+| [`cp-schema-registry`](charts/cp-schema-registry/README.md) | Confluent Schema Registry 8.3 | needs an existing Kafka; the upstream confluent chart is gone, this is the only copy |
 | [`cp-ksql-server`](charts/cp-ksql-server/README.md) | Confluent ksqlDB 7.9 | needs an existing Kafka; vendored from the same deleted confluent repo, **not published yet** |
 | [`mongodb-sharded`](charts/mongodb-sharded/README.md) | MongoDB 8.0 | fork of `bitnami/mongodb-sharded`, images from [shepherd44/containers](https://github.com/shepherd44/containers) |
 | [`common`](charts/common/README.md) | — | bitnami library chart, dependency of `mongodb-sharded`, not published |

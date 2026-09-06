@@ -29,11 +29,15 @@ carries its `LICENSE` verbatim, recovered from a surviving fork. Local changes a
 
 | | |
 |---|---|
-| Chart | `1.5.0` |
-| Schema Registry | `7.9.9` (Confluent Platform 7.9.x, Apache Kafka 3.9) |
+| Chart | `1.6.0` |
+| Schema Registry | `8.3.1` (Confluent Platform 8.3.x, Apache Kafka 4.3) |
 
-Confluent supports each Community release for two years from its minor release date.
-7.9.x runs out on 2027-02-19. The 7.5.x this chart used to ship ended 2025-08-25.
+Confluent supports each Community release for two years from its minor release date, and
+designates no LTS line. 8.3.x runs out on 2027-06-17, which is the longest runway on
+offer; the 7.9.x this chart shipped until 1.5.0 ends 2027-02-19.
+
+8.3.1 talks to older brokers — verified against Kafka 3.5.1 here — so this is a tag bump,
+not a broker upgrade. Pin `image.tag` if you want to stay on 7.9.x.
 
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each chart version
 - [docs/schema-registry-versions.md](docs/schema-registry-versions.md) — which Schema
@@ -662,7 +666,7 @@ carry extra values through wrappers — and strict inside the maps the chart own
 | --------- | ----------- | ------- |
 | `replicaCount` | Number of Schema Registry servers | `1` |
 | `image.repository` | Image repository | `confluentinc/cp-schema-registry` |
-| `image.tag` | Image tag | `7.9.9` |
+| `image.tag` | Image tag | `8.3.1` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `image.pullSecrets` | Secrets for private registries | unset |
 | `kafka.bootstrapServers` | Kafka bootstrap servers. **Required** | `""` |
