@@ -9,6 +9,34 @@ no upstream changelog to keep alongside this one.
 
 Each release is tagged in git as `cp-schema-registry-<version>`.
 
+## 1.6.0
+
+- **Default image is `8.3.1`** (Confluent Platform 8.3.x), up from `7.9.9`. Nothing else
+  in the chart changes.
+
+  Confluent designates no LTS line — every minor gets a flat two years of Community
+  support — so the choice is just which line has the most left: 8.3.x to 2027-06-17
+  against 7.9.x to 2027-02-19.
+
+  The reason 7.9.x was pinned was that 8.3 ships Kafka **4.3** clients while the brokers
+  here are Kafka 3.5.1. That was checked rather than assumed: an 8.3.1 pod with its own
+  `group.id` and its own `_schemas` topic, pointed at those brokers, started clean and
+  served `/`, `/subjects` and `/mode`, and round-tripped a schema register and read-back.
+  Kafka negotiates per-API versions on connect and 4.x clients still support brokers back
+  to 2.1.
+
+  No configuration key registered at 7.5.0 is gone by 8.3.0 — the surface only grows, 63
+  keys to 82 — so an existing values file cannot break on the bump. See
+  [docs/schema-registry-versions.md](docs/schema-registry-versions.md).
+
+  The image's JRE moves from Temurin 17 to Temurin 25; both are cgroup v2 aware, so heap
+  sizing against `resources.limits.memory` behaves the same.
+
+  **This rolls the pods.** Schema Registry keeps its state in the `_schemas` topic rather
+  than on disk, so a rollback is a tag change. To stay on 7.9.x, set `image.tag: "7.9.9"`
+  — the ksqlDB in these namespaces is 7.9.0, and pinning is the way to keep the Confluent
+  versions aligned.
+
 ## 1.5.0
 
 - **`enableServiceLinks: false`.** Kubernetes injects an environment variable set for
