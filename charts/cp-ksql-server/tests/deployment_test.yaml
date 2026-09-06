@@ -286,3 +286,50 @@ tests:
       - equal:
           path: spec.strategy.type
           value: Recreate
+
+  # ksqlDB otherwise advertises its own hostname, and a Deployment pod's name is not in
+  # DNS, so every inter-node call fails: SHOW QUERIES reports the other servers
+  # UNRESPONSIVE and pull queries cannot reach another node's state store.
+  - it: advertises the pod IP so the servers can find each other
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_KSQL_ADVERTISED_LISTENER
+            value: http://$(POD_IP):8088
+
+  # Not KSQL_POD_IP: the image turns every KSQL_* variable into a ksql-server.properties
+  # entry, and this one exists only to be substituted.
+  - it: keeps the helper variable out of the KSQL_ namespace
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+
+  - it: takes an explicit advertised listener over the pod IP
+    set:
+      advertisedListener: http://ksql-0.ksql-headless:8088
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KSQL_KSQL_ADVERTISED_LISTENER
+            value: http://ksql-0.ksql-headless:8088
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP

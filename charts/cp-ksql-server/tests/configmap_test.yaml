@@ -9,17 +9,24 @@ tests:
       - equal:
           path: metadata.name
           value: t-cp-ksql-server-jmx-configmap
+      # The type is the service id concatenated onto the group name with no separator.
+      # The name this chart inherited, type=ksql-engine-query-stats, matches no bean --
+      # which is why the exporter served nothing but its own metrics for years.
       - matchRegex:
           path: data["jmx-ksql-server-prometheus.yml"]
-          pattern: io\.confluent\.ksql\.metrics:type=ksql-engine-query-stats
-      # jmx_exporter 1.x renamed whitelistObjectNames. The metric names the rules
-      # produce are unchanged, so nothing downstream has to move.
+          pattern: 'io\.confluent\.ksql\.metrics:type=_confluent-ksql-\*'
       - matchRegex:
           path: data["jmx-ksql-server-prometheus.yml"]
-          pattern: "includeObjectNames:"
+          pattern: 'type=_confluent-ksql-\(\.\+\)ksql-engine-query-stats><>\(\[\^:\]\+\):'
       - matchRegex:
           path: data["jmx-ksql-server-prometheus.yml"]
-          pattern: cp_ksql_server_metrics_
+          pattern: 'name: cp_ksql_server_metrics_\$2'
+      - matchRegex:
+          path: data["jmx-ksql-server-prometheus.yml"]
+          pattern: 'ksql_service_id: "\$1"'
+      - notMatchRegex:
+          path: data["jmx-ksql-server-prometheus.yml"]
+          pattern: whitelistObjectNames
       - matchRegex:
           path: data["jmx-ksql-server-prometheus.yml"]
           pattern: rmi://localhost:5555/jmxrmi

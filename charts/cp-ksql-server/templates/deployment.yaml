@@ -91,6 +91,21 @@ spec:
             value: {{ template "cp-ksql-server.cp-schema-registry.service-name" . }}
           - name: KSQL_HEAP_OPTS
             value: "{{ $v.heapOptions }}"
+          {{- /* Without this ksqlDB advertises its hostname, which for a Deployment pod
+          is not in DNS, and every inter-node call fails. The pod IP always resolves. */}}
+          {{- if $v.advertisedListener }}
+          - name: KSQL_KSQL_ADVERTISED_LISTENER
+            value: {{ $v.advertisedListener | quote }}
+          {{- else }}
+          {{- /* Not KSQL_POD_IP: the image turns every KSQL_* variable into a
+          ksql-server.properties entry, and this one is only here to be substituted. */}}
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: KSQL_KSQL_ADVERTISED_LISTENER
+            value: http://$(POD_IP):{{ $v.service.port }}
+          {{- end }}
           {{- if $v.ksql.headless }}
           - name: KSQL_KSQL_QUERIES_FILE
             value: /etc/ksql/queries/queries.sql
