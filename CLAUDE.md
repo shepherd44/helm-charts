@@ -173,5 +173,23 @@ passing check. `cp-schema-registry` nests everything under `schema_registry`, so
 
 Grep the output for `image:` and confirm every tag actually exists on Docker Hub.
 
+Those per-chart flags are not typed out in the workflow. `.github/workflows/ci.yaml`
+names no chart at all: what CI needs to know about one lives in
+`.github/ci/<chart>.env`, sourced with `$CHART` set to the chart's path. It is outside
+the chart directory because ct treats any file that changes under `charts/<name>/` as a
+chart change and demands a version bump — a CI-only edit should not force a release.
+
+```shell
+RENDER_ARGS=(-f "$CHART/ci/metrics-values.yaml" --set metrics.enabled=true)
+INSTALL=true                                    # run `ct install` on kind
+FIXTURES=(.github/ci/kafka.yaml)                # applied first
+FIXTURE_WAIT=(-n kafka rollout status deployment/kafka --timeout=300s)
+```
+
+Every variable is optional. **A chart with no env file is rendered with plain defaults
+and is never installed**, which is the safe default and also a silent one: leaving
+`INSTALL=true` out does not fail anything, it just means nothing was ever installed. Say
+out loud which of the two a new chart is getting.
+
 After publishing, verify against the live repo rather than the working tree — add the
 Pages URL as a helm repo, `helm pull`, and render the pulled tarball.
