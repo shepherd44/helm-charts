@@ -17,7 +17,7 @@ serviceId: "cp-ksql-server"
 ## ref: https://hub.docker.com/r/confluentinc/cp-ksqldb-server/
 image:
   repository: confluentinc/cp-ksqldb-server
-  tag: 7.9.9
+  tag: 8.3.1
   pullPolicy: IfNotPresent
   ## Secrets must already exist in the namespace.
   ## ref: https://kubernetes.io/docs/concepts/containers/images/#specifying-imagepullsecrets-on-a-pod

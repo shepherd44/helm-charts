@@ -103,7 +103,7 @@ new map — Helm replaces the map with the string, taking the chart's own `tag` 
 | Parameter | Description | Default |
 | --------- | ----------- | ------- |
 | `image.repository` | ksqlDB server image. | `confluentinc/cp-ksqldb-server` |
-| `image.tag` | Image tag. | `7.9.9` |
+| `image.tag` | Image tag. | `8.3.1` |
 | `image.pullPolicy` | | `IfNotPresent` |
 | `image.pullSecrets` | Secrets for a private registry. Must already exist in the namespace. | `[]` |
 
