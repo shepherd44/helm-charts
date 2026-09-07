@@ -13,8 +13,8 @@ kubeVersion: ">=1.22.0-0"
 ## 1.0.0, not 0.1.2. Upstream's numbering stopped when confluentinc archived the
 ## repository; 0.1.1 was a local bump made in k8s-manifests and never published anywhere.
 ## This is the first version in this repository's line for the chart.
-version: 1.4.0
-appVersion: "7.9.9"
+version: 1.5.0
+appVersion: "8.3.1"
 keywords:
   - kafka
   - ksql
@@ -33,7 +33,7 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/images: |
     - name: cp-ksqldb-server
-      image: confluentinc/cp-ksqldb-server:7.9.9
+      image: confluentinc/cp-ksqldb-server:8.3.1
     - name: jmx-exporter
       image: shepherd9664/jmx-exporter:1.6.0-latest
     - name: test-connection
@@ -41,10 +41,10 @@ annotations:
   artifacthub.io/links: |
     - name: Chart source
       url: https://github.com/shepherd44/helm-charts/tree/main/charts/cp-ksql-server
+    - name: Changelog
+      url: https://github.com/shepherd44/helm-charts/blob/main/charts/cp-ksql-server/CHANGELOG.md
   artifacthub.io/changes: |
-    - kind: fixed
-      description: "The JMX rules match a bean that exists. The inherited config looked for type=ksql-engine-query-stats, which ksqlDB has never registered, so the exporter had only ever served its own four metrics"
-    - kind: fixed
-      description: "ksql.advertised.listener is set to the pod IP, so the servers can reach each other; ksqlDB otherwise advertises a Deployment pod's hostname, which is not in DNS"
     - kind: changed
-      description: "The probe rationale in values.yaml and the README described /healthcheck as permanently unhealthy; it was stale state that cleared on restart"
+      description: "Default ksqlDB image is 8.3.1 (Confluent Platform 8.3.x, Apache Kafka 4.3 clients, Temurin 25) instead of 7.9.9"
+    - kind: added
+      description: "CHANGELOG.md, covering this chart's line from 1.0.0"
