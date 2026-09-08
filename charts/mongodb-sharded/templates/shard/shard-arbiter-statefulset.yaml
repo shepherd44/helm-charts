@@ -123,6 +123,10 @@ spec:
               value: {{ $.Values.common.containerPorts.mongodb | quote }}
             - name: MONGODB_INITIAL_PRIMARY_HOST
               value: {{ printf "%s-shard%d-data-0.%s-headless.%s.svc.%s" (include "common.names.fullname" $ ) $i (include "common.names.fullname" $ ) $.Release.Namespace $.Values.clusterDomain }}
+            # arbiter-entrypoint.sh walks data-0..data-(N-1) to find the member that is
+            # actually primary; MONGODB_INITIAL_PRIMARY_HOST above is only its starting point.
+            - name: MONGODB_SHARD_DATA_REPLICA_COUNT
+              value: {{ $.Values.shardsvr.dataNode.replicaCount | quote }}
             - name: MONGODB_REPLICA_SET_NAME
               value: {{ printf "%s-shard-%d" ( include "common.names.fullname" $ ) $i }}
             {{- if $.Values.common.useHostnames }}
@@ -244,6 +248,8 @@ spec:
               subPath: app-logs-dir
             - name: empty-dir
               mountPath: /.mongodb
+            - name: replicaset-entrypoint-configmap
+              mountPath: /entrypoint
               subPath: app-mongosh-dir
             {{- if or $.Values.shardsvr.arbiter.config $.Values.shardsvr.arbiter.configCM }}
             - name: config
@@ -356,6 +362,9 @@ spec:
         {{- include "common.tplvalues.render" ( dict "value" . "context" $ ) | nindent 8 }}
         {{- end }}
       volumes:
+        - name: replicaset-entrypoint-configmap
+          configMap:
+            name: {{ printf "%s-replicaset-entrypoint" (include "common.names.fullname" $) }}
         - name: empty-dir
           emptyDir: {}
         {{- if or $.Values.shardsvr.arbiter.config $.Values.shardsvr.arbiter.configCM }}
