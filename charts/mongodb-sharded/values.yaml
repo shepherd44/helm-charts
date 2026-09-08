@@ -1712,8 +1712,13 @@ shardsvr:
       seccompProfile:
         type: "RuntimeDefault"
     ## @param shardsvr.arbiter.command Override default container command (useful when using custom images)
+    ## Defaults to a wrapper that resolves the shard's real replica set primary before
+    ## handing over to the image entrypoint. Without it the arbiter fails to register
+    ## whenever data-0 is not the primary. Set to [] to run the image entrypoint directly.
     ##
-    command: []
+    command:
+      - /bin/bash
+      - /entrypoint/arbiter-entrypoint.sh
     ## @param shardsvr.arbiter.args Override default container args (useful when using custom images)
     ##
     args: []

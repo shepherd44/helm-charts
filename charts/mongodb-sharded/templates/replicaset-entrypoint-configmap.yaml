@@ -37,3 +37,60 @@ data:
     fi
 
     exec /entrypoint.sh /run.sh
+  arbiter-entrypoint.sh: |-
+    #!/bin/bash
+
+    sleep 5
+
+    . /liblog.sh
+
+    # The chart can only name a static host in MONGODB_INITIAL_PRIMARY_HOST, and it names
+    # <shard>-data-0. The image entrypoint then waits for *that* host to report itself
+    # primary before registering the arbiter, and gives up otherwise:
+    #
+    #   ERROR ==> Unable to validate <...>-data-0 as primary node in the replica set scenario!
+    #
+    # A replica set is free to elect any data member, so an arbiter that (re)starts while
+    # data-0 is a secondary fails and CrashLoops until an election happens to move the
+    # primary back. Resolve the real primary here and hand that to the entrypoint instead.
+    replicas="${MONGODB_SHARD_DATA_REPLICA_COUNT:-1}"
+    port="${MONGODB_PORT_NUMBER:-27017}"
+    base="$MONGODB_INITIAL_PRIMARY_HOST"
+
+    password="${MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD:-}"
+    if [[ -z "$password" ]] && [[ -r "${MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD_FILE:-}" ]]; then
+      password="$(< "$MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD_FILE")"
+    fi
+
+    is_primary() {
+      local host="$1" out
+      out="$(mongosh "mongodb://${host}:${port}/admin" --quiet \
+        ${MONGODB_INITIAL_PRIMARY_ROOT_USER:+-u "$MONGODB_INITIAL_PRIMARY_ROOT_USER"} \
+        ${password:+-p "$password"} \
+        --eval 'db.hello().isWritablePrimary' 2>/dev/null)" || return 1
+      [[ "$out" == "true" ]]
+    }
+
+    primary=""
+    for _ in $(seq 1 "${MONGODB_INIT_RETRY_ATTEMPTS:-30}"); do
+      for i in $(seq 0 "$((replicas - 1))"); do
+        host="${base/-data-0./-data-${i}.}"
+        if is_primary "$host"; then
+          primary="$host"
+          break 2
+        fi
+      done
+      sleep "${MONGODB_INIT_RETRY_DELAY:-5}"
+    done
+
+    # No primary anywhere means the replica set is still being initialised. Fall through
+    # with the chart's original value so a first install behaves exactly as before: the
+    # data-0 pod is the one started as primary, and the entrypoint waits for it.
+    if [[ -n "$primary" ]]; then
+      [[ "$primary" != "$base" ]] && info "Replica set primary is $primary, not $base; using it to register the arbiter"
+      export MONGODB_INITIAL_PRIMARY_HOST="$primary"
+    else
+      warn "Could not determine the replica set primary; falling back to $base"
+    fi
+
+    exec /entrypoint.sh /run.sh
