@@ -248,9 +248,9 @@ spec:
               subPath: app-logs-dir
             - name: empty-dir
               mountPath: /.mongodb
+              subPath: app-mongosh-dir
             - name: replicaset-entrypoint-configmap
               mountPath: /entrypoint
-              subPath: app-mongosh-dir
             {{- if or $.Values.shardsvr.arbiter.config $.Values.shardsvr.arbiter.configCM }}
             - name: config
               mountPath: /bitnami/mongodb/conf/
