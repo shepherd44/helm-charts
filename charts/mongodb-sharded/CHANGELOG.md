@@ -9,6 +9,15 @@ not the same chart as the version carrying that number upstream.
 
 Each release is tagged in git as `mongodb-sharded-<version>`.
 
+## 9.4.21
+
+- **`service.headless.publishNotReadyAddresses`**, default `true`. The headless service
+  now publishes DNS records for pods that are not ready yet, as bitnami's non-sharded
+  `mongodb` chart already does. Replica set members resolve each other through this
+  service; without it a restarting member's name returned NXDOMAIN until its readiness
+  probe passed, which stalls elections and initial sync and made leaks like
+  SERVER-136787 more likely. Set it to `false` for the previous behaviour.
+
 ## 9.4.18
 
 No change to what the chart renders. This adds the checks the repo's other chart

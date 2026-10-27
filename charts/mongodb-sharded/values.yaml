@@ -353,6 +353,12 @@ service:
     ## @param service.headless.annotations Annotations for the headless service.
     ##
     annotations: {}
+    ## @param service.headless.publishNotReadyAddresses Publish DNS records for pods that are not ready yet
+    ## Replica set members find each other through the headless service. Without this a
+    ## restarting member's name returns NXDOMAIN until its readiness probe passes, which
+    ## stalls elections and resync, and makes leaks like SERVER-136787 more likely.
+    ##
+    publishNotReadyAddresses: true
 ## Network Policies
 ## Ref: https://kubernetes.io/docs/concepts/services-networking/network-policies/
 ##
