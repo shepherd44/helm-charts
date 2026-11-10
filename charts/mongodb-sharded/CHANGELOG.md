@@ -9,6 +9,16 @@ not the same chart as the version carrying that number upstream.
 
 Each release is tagged in git as `mongodb-sharded-<version>`.
 
+## 9.4.22
+
+- **`service.allocateLoadBalancerNodePorts`** and
+  **`mongos.servicePerReplica.allocateLoadBalancerNodePorts`**, default unset. Set to `false`
+  to stop a `LoadBalancer` mongos service from opening a nodePort on every node — MetalLB and
+  IP-mode cloud load balancers reach the pods directly and never use it. Unset renders
+  exactly as before. Kubernetes keeps nodePorts an existing service already holds when the
+  field flips to `false`; clear `service.nodePorts.mongodb` too, and on Kubernetes 1.22 the
+  service has to be switched to `ClusterIP` and back once to release them.
+
 ## 9.4.21
 
 - **`service.headless.publishNotReadyAddresses`**, default `true`. The headless service
