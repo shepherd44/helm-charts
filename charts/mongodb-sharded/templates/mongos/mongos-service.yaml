@@ -16,6 +16,9 @@ metadata:
   {{- end }}
 spec:
   type: {{ .Values.service.type }}
+  {{- if and (eq .Values.service.type "LoadBalancer") (kindIs "bool" .Values.service.allocateLoadBalancerNodePorts) }}
+  allocateLoadBalancerNodePorts: {{ .Values.service.allocateLoadBalancerNodePorts }}
+  {{- end }}
   {{- if and .Values.service.loadBalancerIP (eq .Values.service.type "LoadBalancer") }}
   loadBalancerIP: {{ .Values.service.loadBalancerIP }}
   {{- end }}

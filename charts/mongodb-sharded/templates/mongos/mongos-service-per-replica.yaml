@@ -29,6 +29,9 @@ spec:
   {{- if $.Values.mongos.servicePerReplica.externalIPs }}
   externalIPs: {{- toYaml $.Values.mongos.servicePerReplica.externalIPs | nindent 4 }}
   {{- end }}
+  {{- if and (eq $.Values.mongos.servicePerReplica.type "LoadBalancer") (kindIs "bool" $.Values.mongos.servicePerReplica.allocateLoadBalancerNodePorts) }}
+  allocateLoadBalancerNodePorts: {{ $.Values.mongos.servicePerReplica.allocateLoadBalancerNodePorts }}
+  {{- end }}
   {{- if and $.Values.mongos.servicePerReplica.loadBalancerIPs (eq $.Values.mongos.servicePerReplica.type "LoadBalancer") }}
   loadBalancerIP: {{ index $.Values.mongos.servicePerReplica.loadBalancerIPs $i }}
   {{- end }}

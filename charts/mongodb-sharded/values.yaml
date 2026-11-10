@@ -333,6 +333,13 @@ service:
   ## ref: https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/#restrict-access-for-loadbalancer-service
   ##
   loadBalancerSourceRanges: []
+  ## @param service.allocateLoadBalancerNodePorts Allocate nodePorts for the LoadBalancer service type. Unset ("") leaves it to Kubernetes (true)
+  ## Set false when the load balancer reaches pods without going through a nodePort (MetalLB,
+  ## cloud LBs in IP mode). Kubernetes does not release nodePorts an existing service already
+  ## holds when this flips to false; leave service.nodePorts.mongodb empty as well.
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#load-balancer-nodeport-allocation
+  ##
+  allocateLoadBalancerNodePorts: ""
   ## @param service.extraPorts Extra ports to expose (normally used with the `sidecar` value)
   ##
   extraPorts: []
@@ -976,6 +983,10 @@ mongos:
     ## ref: https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/#restrict-access-for-loadbalancer-service
     ##
     loadBalancerSourceRanges: []
+    ## @param mongos.servicePerReplica.allocateLoadBalancerNodePorts Allocate nodePorts for the LoadBalancer service type. Unset ("") leaves it to Kubernetes (true)
+    ## See service.allocateLoadBalancerNodePorts. Leave mongos.servicePerReplica.nodePorts empty when false.
+    ##
+    allocateLoadBalancerNodePorts: ""
     ## @param mongos.servicePerReplica.extraPorts Extra ports to expose (normally used with the `sidecar` value)
     ##
     extraPorts: []
